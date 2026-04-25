@@ -15,6 +15,7 @@ from vello.api.routes.inferences import router as inferences_router
 from vello.api.routes.kortex_sync import router as kortex_router
 from vello.api.routes.signals import router as signals_router
 from vello.api.routes.temporal import router as temporal_router
+from vello.api.routes.gaps import router as gaps_router
 
 
 @asynccontextmanager
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(kortex_router,      prefix="/api/v1/kortex",     tags=["kortex"])
     app.include_router(signals_router,     prefix="/api/v1/signals",    tags=["signals"])
     app.include_router(temporal_router,    prefix="/api/v1/temporal",   tags=["temporal"])
+    app.include_router(gaps_router,        prefix="/api/v1/gaps",       tags=["gaps"])
 
     @app.get("/health", include_in_schema=False)
     async def health():

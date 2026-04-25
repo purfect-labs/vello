@@ -159,7 +159,7 @@ async def import_from_kortex(user=Depends(get_current_user)):
             inference_type="contradiction",
             description=(
                 f"Contradiction in {c['domain']}.{c['path']}: "
-                f"previously "{c['old_value']}", now "{c['new_value']}". "
+                f"previously '{c['old_value']}', now '{c['new_value']}'. "
                 f"Which is current? ({c.get('rationale', 'no context')})"
             ),
             proposed={

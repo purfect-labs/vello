@@ -92,4 +92,9 @@ export const api = {
     predict: (pattern_key: string) => request<import("./types").TemporalPattern>(`/temporal/predict/${pattern_key}`),
     deviations: () => request<import("./types").TemporalDeviation[]>("/temporal/deviations"),
   },
+
+  gaps: {
+    list: () => request<Array<{ type: string; domain: string; description: string; pattern_key?: string }>>("/gaps/"),
+    context: () => request<{ context: string }>("/gaps/context"),
+  },
 };
