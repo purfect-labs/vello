@@ -207,6 +207,49 @@ Each card shows `trigger_message` (natural language), confirm button (logs to `a
 
 ---
 
+## Behavioral Gap Detection
+
+`GET /api/v1/gaps` compares stated life context against observed temporal patterns to surface behavioral mismatches.
+
+### Gap Types
+
+| Type | Description |
+|---|---|
+| `missing_pattern` | User has a stated goal/preference in life_context but no matching temporal pattern has been observed |
+| `routine_variance` | User describes themselves as a routine person, but pattern std-dev exceeds 60 minutes |
+| `sleep_mismatch` | Stated sleep target (extracted from life_context) differs from observed mean bedtime by ≥2 hours |
+
+### Example Response
+
+```json
+[
+  {
+    "type": "missing_pattern",
+    "domain": "health",
+    "description": "states exercise goal but no gym pattern observed",
+    "stated_key": "exercise"
+  },
+  {
+    "type": "routine_variance",
+    "domain": "schedule",
+    "description": "stated preference for routine but 'work_start' has high time variance (std > 60 min)",
+    "pattern_key": "work_start"
+  }
+]
+```
+
+Gaps are also available as an LLM context block via `GET /api/v1/gaps/context`:
+
+```
+[BEHAVIORAL GAPS — stated vs. observed]
+- states exercise goal but no gym pattern observed
+- stated preference for routine but 'work_start' has high time variance (std > 60 min)
+```
+
+This context block is available for injection into dialogue system prompts so the agent can surface relevant gaps naturally.
+
+---
+
 ## Kortex Integration
 
 Vello optionally connects to [Kortex](https://kortex.flexflows.net), a personal memory engine. When connected, Vello pulls structured life data from Kortex and uses it to populate `life_context`, scan for signals, and generate contradiction inferences.
@@ -386,6 +429,16 @@ curl http://localhost:8001/api/v1/temporal/predict/gym -b cookies.txt
 
 # Current deviations (patterns typical today where you're running late)
 curl http://localhost:8001/api/v1/temporal/deviations -b cookies.txt
+```
+
+### Gaps
+
+```bash
+# Behavioral gaps (stated context vs. observed patterns)
+curl http://localhost:8001/api/v1/gaps -b cookies.txt
+
+# Gaps as LLM context block
+curl http://localhost:8001/api/v1/gaps/context -b cookies.txt
 ```
 
 ### Zones
