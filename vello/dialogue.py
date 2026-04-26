@@ -4,17 +4,15 @@ Extracts structured life context from natural conversation.
 """
 import json
 import re
+from datetime import datetime, timezone
 from typing import Optional
 
-import anthropic
-
-from vello.config import ANTHROPIC_API_KEY, DIALOGUE_MODEL
+from vello.config import DIALOGUE_MODEL
 from vello.database import (
     context_as_text, get_dialogue_history, upsert_context,
-    save_dialogue_turn, mark_onboarding_complete
+    save_dialogue_turn, mark_onboarding_complete,
 )
-
-_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+from vello.llm import complete
 
 SYSTEM_PROMPT = """\
 You are Vello, a personal life agent. You're having a conversation to understand \
@@ -32,7 +30,7 @@ Respond ONLY with valid JSON — no markdown, no extra text:
   "extracted": [
     {{"domain": "...", "key": "...", "value": "...", "confidence": 0.0}}
   ],
-  "suggest_next": "schedule|fitness|work|people|home|finance|health|preferences|null",
+  "suggest_next": "schedule|work|fitness|people|home|finance|health|preferences|null",
   "onboarding_complete": false
 }}
 
@@ -75,6 +73,12 @@ def _parse_response(raw: str) -> dict:
         return {"message": raw, "extracted": [], "suggest_next": None, "onboarding_complete": False}
 
 
+def _is_first_message_today(history: list) -> bool:
+    """True if no prior turns exist for today (UTC)."""
+    today = datetime.now(timezone.utc).date().isoformat()
+    return not any(t["created_at"].startswith(today) for t in history)
+
+
 def chat(user_id: str, user_message: str, is_first_message: bool = False) -> dict:
     """
     Process a user message, extract any life context, persist it, and return the reply.
@@ -89,14 +93,7 @@ def chat(user_id: str, user_message: str, is_first_message: bool = False) -> dic
 
     messages = _build_messages(history, user_message)
 
-    response = _client.messages.create(
-        model=DIALOGUE_MODEL,
-        max_tokens=600,
-        system=system,
-        messages=messages,
-    )
-
-    raw = response.content[0].text
+    raw = complete(system, messages, model=DIALOGUE_MODEL, max_tokens=600)
     parsed = _parse_response(raw)
 
     assistant_message = parsed.get("message", raw)
@@ -119,6 +116,24 @@ def chat(user_id: str, user_message: str, is_first_message: bool = False) -> dic
 
     if onboarding_done:
         mark_onboarding_complete(user_id)
+
+    # ── Infer wake_time from first message of the day ──────────────────────────
+    if user_message != "__init__" and _is_first_message_today(history):
+        try:
+            from vello.temporal import log_observation
+            now = datetime.now(timezone.utc)
+            minutes = now.hour * 60 + now.minute
+            log_observation(user_id, "wake_time", "Wake time", minutes)
+        except Exception:
+            pass
+
+    # ── Run signal detection on user message ───────────────────────────────────
+    if user_message != "__init__":
+        try:
+            from vello.signals import fire_signals
+            fire_signals(user_id, user_message)
+        except Exception:
+            pass
 
     return {
         "message": assistant_message,

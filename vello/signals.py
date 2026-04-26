@@ -169,3 +169,49 @@ def get_signal_by_id(signal_id: str) -> Optional[dict]:
 def get_transitions_for(signal_id: str) -> list[dict]:
     """Return the list of downstream watches to activate when signal_id fires."""
     return SIGNAL_TRANSITIONS.get(signal_id, [])
+
+
+def fire_signals(user_id: str, text: str) -> int:
+    """
+    Scan text, create triggers respecting dedup + watches, activate downstream watches.
+    Returns count of newly-created triggers.
+    """
+    if not text or not text.strip():
+        return 0
+
+    from vello.database import (
+        has_active_trigger, get_active_watch,
+        create_signal_trigger, create_signal_watch,
+    )
+
+    fired = 0
+    for match in scan_text(text):
+        sid = match["signal_id"]
+        watch = get_active_watch(user_id, sid)
+
+        if has_active_trigger(user_id, sid):
+            if watch is None or watch["factor"] > 0:
+                continue
+
+        create_signal_trigger(
+            user_id=user_id,
+            signal_id=sid,
+            label=match["label"],
+            priority=match["priority"],
+            action_type=match["action_type"],
+            trigger_message=match["trigger_message"],
+            source_text=text[:500],
+            decay_hours=match["decay_hours"],
+        )
+        fired += 1
+
+        for transition in get_transitions_for(sid):
+            create_signal_watch(
+                user_id=user_id,
+                watched_signal_id=transition["signal_id"],
+                triggered_by=sid,
+                factor=transition["factor"],
+                watch_hours=transition["watch_hours"],
+            )
+
+    return fired

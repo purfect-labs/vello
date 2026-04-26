@@ -1,19 +1,28 @@
 """
 Webhook ingest — users wire Zapier/Make/n8n to POST text here.
-Vello runs signal detection and context updates on the payload.
+Vello runs signal detection and lightweight context extraction on the payload.
 """
+import json
+import re
 import secrets
+
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from vello.api.deps import get_current_user
-from vello.database import (
-    get_connection, has_active_trigger, get_active_watch,
-    create_signal_trigger, create_signal_watch,
-)
-from vello.signals import scan_text, get_transitions_for
+from vello.config import ANTHROPIC_API_KEY, LLM_API_KEY, DIALOGUE_MODEL
+from vello.database import get_connection, upsert_context
+from vello.llm import complete
+from vello.signals import fire_signals
 
 router = APIRouter()
+
+_EXTRACT_SYSTEM = """\
+Extract personal facts from the text below. Return ONLY valid JSON:
+{"extracted": [{"domain": "...", "key": "...", "value": "...", "confidence": 0.0}]}
+Domains: schedule, fitness, work, people, home, finance, health, preferences.
+If nothing extractable, return {"extracted": []}. No markdown, no explanation.\
+"""
 
 
 def _get_user_by_token(token: str):
@@ -23,38 +32,38 @@ def _get_user_by_token(token: str):
     return row
 
 
-def _fire_signals(user_id: str, text: str) -> int:
-    fired = 0
-    for match in scan_text(text):
-        sid = match["signal_id"]
-        watch = get_active_watch(user_id, sid)
-        if has_active_trigger(user_id, sid):
-            if watch is None or watch["factor"] > 0:
-                continue
-        create_signal_trigger(
-            user_id=user_id,
-            signal_id=sid,
-            label=match["label"],
-            priority=match["priority"],
-            action_type=match["action_type"],
-            trigger_message=match["trigger_message"],
-            source_text=text[:500],
-            decay_hours=match["decay_hours"],
-        )
-        fired += 1
-        for transition in get_transitions_for(sid):
-            create_signal_watch(
-                user_id=user_id,
-                watched_signal_id=transition["signal_id"],
-                triggered_by=sid,
-                factor=transition["factor"],
-                watch_hours=transition["watch_hours"],
+def _extract_context(user_id: str, text: str) -> int:
+    """Run LLM to extract life context from short webhook text."""
+    try:
+        raw = complete(
+            _EXTRACT_SYSTEM,
+            [{"role": "user", "content": text[:1500]}],
+            model=DIALOGUE_MODEL,
+            max_tokens=400,
+        ).strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"```[a-z]*\n?", "", raw).strip("`").strip()
+        items = json.loads(raw).get("extracted", [])
+    except Exception:
+        return 0
+
+    saved = 0
+    for item in items:
+        if item.get("domain") and item.get("key") and item.get("value"):
+            upsert_context(
+                user_id,
+                domain=item["domain"],
+                key=item["key"],
+                value=str(item["value"]),
+                source="webhook",
+                confidence=float(item.get("confidence", 0.7)),
             )
-    return fired
+            saved += 1
+    return saved
 
 
 class IngestBody(BaseModel):
-    text: str
+    text: str = Field(..., max_length=10000)
     source: str = "webhook"
 
 
@@ -63,8 +72,15 @@ def ingest(body: IngestBody, x_webhook_token: str = Header(...)):
     user = _get_user_by_token(x_webhook_token)
     if not user:
         raise HTTPException(status_code=401, detail="invalid_token")
-    fired = _fire_signals(user["id"], body.text)
-    return {"ok": True, "signals_fired": fired}
+
+    signals_fired = fire_signals(user["id"], body.text)
+
+    # For short texts (conversational length), also extract context
+    context_saved = 0
+    if len(body.text) <= 1500 and (ANTHROPIC_API_KEY or LLM_API_KEY):
+        context_saved = _extract_context(user["id"], body.text)
+
+    return {"ok": True, "signals_fired": signals_fired, "context_saved": context_saved}
 
 
 @router.get("/token")

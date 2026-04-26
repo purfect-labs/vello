@@ -11,62 +11,10 @@ from pydantic import BaseModel
 
 from vello.api.deps import get_current_user
 from vello.config import KORTEX_API_URL
-from vello.database import (
-    set_kortex_token, upsert_context, get_user_by_id,
-    has_active_trigger, get_active_watch, create_signal_trigger, create_signal_watch,
-    create_inference,
-)
-from vello.signals import scan_text, get_transitions_for
+from vello.database import set_kortex_token, upsert_context, get_user_by_id, create_inference
+from vello.signals import fire_signals
 
 router = APIRouter()
-
-
-def _fire_signals(user_id: str, text: str) -> int:
-    """
-    Scan text for intent signals, fire new triggers respecting dedup + watches,
-    and activate downstream watches for any signals that fire.
-    Returns count of newly-created triggers.
-    """
-    if not text.strip():
-        return 0
-
-    fired = 0
-    for match in scan_text(text):
-        sid = match["signal_id"]
-        watch = get_active_watch(user_id, sid)
-
-        # Decide whether to fire:
-        # - No active trigger → always fire
-        # - Active watch with factor=0 → bypass dedup, always fire
-        # - Active watch with factor>0 → handled by has_active_trigger (dedup still applies)
-        # - No watch, active trigger → skip (normal anti-fatigue)
-        if has_active_trigger(user_id, sid):
-            if watch is None or watch["factor"] > 0:
-                continue  # blocked by dedup
-
-        create_signal_trigger(
-            user_id=user_id,
-            signal_id=sid,
-            label=match["label"],
-            priority=match["priority"],
-            action_type=match["action_type"],
-            trigger_message=match["trigger_message"],
-            source_text=text[:500] if len(text) > 500 else text,
-            decay_hours=match["decay_hours"],
-        )
-        fired += 1
-
-        # Activate downstream watches for related signals
-        for transition in get_transitions_for(sid):
-            create_signal_watch(
-                user_id=user_id,
-                watched_signal_id=transition["signal_id"],
-                triggered_by=sid,
-                factor=transition["factor"],
-                watch_hours=transition["watch_hours"],
-            )
-
-    return fired
 
 
 class TokenBody(BaseModel):
@@ -75,7 +23,6 @@ class TokenBody(BaseModel):
 
 @router.post("/connect")
 async def connect_kortex(body: TokenBody, user=Depends(get_current_user)):
-    """Validate the Kortex token and store it."""
     if not body.token.startswith("ktx_"):
         raise HTTPException(status_code=422, detail="invalid_token_format")
 
@@ -100,12 +47,6 @@ async def connect_kortex(body: TokenBody, user=Depends(get_current_user)):
 
 @router.post("/import")
 async def import_from_kortex(user=Depends(get_current_user)):
-    """
-    Pull Kortex profile and populate life_context.
-    Also:
-    - Scans imported text for intent signals (with chaining)
-    - Imports pending contradictions as Vello inferences for dashboard review
-    """
     fresh_user = get_user_by_id(user["id"])
     token = fresh_user["kortex_token"] if fresh_user else None
     if not token:
@@ -130,7 +71,6 @@ async def import_from_kortex(user=Depends(get_current_user)):
     imported = 0
     text_parts: list[str] = []
 
-    # Import life context
     for entry in data.get("life_context", []):
         upsert_context(
             user["id"],
@@ -143,15 +83,11 @@ async def import_from_kortex(user=Depends(get_current_user)):
         imported += 1
         text_parts.append(entry["value"])
 
-    # Also scan high-confidence fact values
     for fact in data.get("facts", []):
         text_parts.append(str(fact.get("value", "")))
 
-    # Fire signals with chaining
-    combined_text = " ".join(text_parts)
-    signals_fired = _fire_signals(user["id"], combined_text)
+    signals_fired = fire_signals(user["id"], " ".join(text_parts))
 
-    # Import contradictions as Vello inferences for dashboard review
     contradictions_imported = 0
     for c in data.get("contradictions", []):
         create_inference(
