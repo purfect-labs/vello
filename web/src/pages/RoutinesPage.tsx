@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Nav from "../components/Nav";
 import { api } from "../api";
 import type { Routine, Zone, Contact } from "../types";
-import { colors, typography, radius } from "../design-system";
+import { V } from "../vello-tokens";
 
 const ROUTINE_TYPES = ["workout", "commute", "morning", "sleep", "medication", "custom"];
 const ZONE_TYPES    = ["home", "work", "gym", "custom"];
@@ -12,20 +12,112 @@ const NOTIFY_MODES  = [
   { value: "draft",   label: "Draft only" },
 ];
 
+function Mono({ children, size = 10, color, style }: {
+  children: React.ReactNode; size?: number; color?: string; style?: React.CSSProperties;
+}) {
+  return <span style={{ fontFamily: V.mono, fontSize: size, color: color || V.inkDim, letterSpacing: "0.04em", ...style }}>{children}</span>;
+}
+
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <Mono size={10} color={V.inkFaint} style={{ letterSpacing: "0.2em", textTransform: "uppercase", display: "block", marginBottom: 14 }}>
+      {children}
+    </Mono>
+  );
+}
+
 const INPUT: React.CSSProperties = {
-  background: colors.elevated, border: `1px solid ${colors.border}`, borderRadius: radius.sm,
-  padding: "8px 12px", fontSize: typography.size.base, color: colors.primary, outline: "none", width: "100%",
+  background: V.surfaceHi, border: `1px solid ${V.border}`,
+  borderRadius: 10, padding: "9px 14px", fontSize: 13, color: V.ink,
+  outline: "none", width: "100%", fontFamily: "inherit",
 };
+
 const SELECT: React.CSSProperties = { ...INPUT, cursor: "pointer" };
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function ItemRow({ left, right, onDelete }: {
+  left: React.ReactNode; right?: React.ReactNode; onDelete: () => void;
+}) {
+  const [hover, setHover] = useState(false);
   return (
-    <section style={{ marginBottom: 48 }}>
-      <p style={{ margin: "0 0 16px", fontSize: typography.size.xs, color: colors.muted, fontWeight: typography.weight.bold, letterSpacing: "0.1em" }}>
-        {title}
-      </p>
-      {children}
-    </section>
+    <div style={{
+      background: V.surface, border: `1px solid ${V.border}`, borderRadius: 12,
+      padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between",
+    }}>
+      <div style={{ flex: 1 }}>{left}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {right}
+        <button
+          onClick={onDelete}
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => setHover(false)}
+          style={{
+            fontFamily: V.mono, fontSize: 14, color: hover ? V.bad : V.inkFaint,
+            background: "none", border: "none", cursor: "pointer", transition: "color .15s",
+          }}>×</button>
+      </div>
+    </div>
+  );
+}
+
+function AddForm({ fields, onSubmit, onCancel, saving }: {
+  fields: React.ReactNode; onSubmit: () => void; onCancel: () => void; saving: boolean;
+}) {
+  return (
+    <div style={{
+      background: V.surface, border: `1px solid ${V.borderHi}`,
+      borderRadius: 12, padding: 18, display: "flex", flexDirection: "column", gap: 10,
+    }}>
+      {fields}
+      <div style={{ display: "flex", gap: 8 }}>
+        <PrimaryBtn onClick={onSubmit} disabled={saving}>{saving ? "…" : "add"}</PrimaryBtn>
+        <GhostBtn onClick={onCancel}>cancel</GhostBtn>
+      </div>
+    </div>
+  );
+}
+
+function PrimaryBtn({ children, onClick, disabled }: {
+  children: React.ReactNode; onClick: () => void; disabled?: boolean;
+}) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      fontFamily: V.sans, fontSize: 13, fontWeight: 600,
+      color: "#100c06", background: disabled ? V.inkFaint : V.ink,
+      border: "none", borderRadius: 999, padding: "8px 18px",
+      cursor: disabled ? "default" : "pointer", transition: "background .2s",
+    }}>{children}</button>
+  );
+}
+
+function GhostBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        fontFamily: V.sans, fontSize: 13, fontWeight: 500,
+        color: V.ink, background: "transparent",
+        border: `1px solid ${hover ? V.borderHi : V.border}`,
+        borderRadius: 999, padding: "7px 16px",
+        cursor: "pointer", transition: "border-color .2s",
+      }}>{children}</button>
+  );
+}
+
+function AddBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        fontFamily: V.mono, fontSize: 11, letterSpacing: "0.14em",
+        color: hover ? V.inkDim : V.inkFaint,
+        background: "transparent", border: `1px solid ${hover ? V.border : "transparent"}`,
+        borderRadius: 8, padding: "6px 12px",
+        cursor: "pointer", transition: "all .2s", textTransform: "uppercase" as const,
+      }}>{children}</button>
   );
 }
 
@@ -52,34 +144,34 @@ export default function RoutinesPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.routines.list().then((r) => setRoutines(r as Routine[])).catch(() => {});
-    api.zones.list().then((z) => setZones(z as Zone[])).catch(() => {});
-    api.contacts.list().then((c) => setContacts(c as Contact[])).catch(() => {});
+    api.routines.list().then(r => setRoutines(r as Routine[])).catch(() => {});
+    api.zones.list().then(z => setZones(z as Zone[])).catch(() => {});
+    api.contacts.list().then(c => setContacts(c as Contact[])).catch(() => {});
   }, []);
 
   async function addRoutine() {
     if (!routineName.trim()) return;
     setSaving(true);
     const { id } = await api.routines.create({ name: routineName, type: routineType });
-    setRoutines((r) => [...r, { id, name: routineName, type: routineType, schedule: {}, active: true, confidence: 1, source: "manual", created_at: new Date().toISOString() }]);
+    setRoutines(r => [...r, { id, name: routineName, type: routineType, schedule: {}, active: true, confidence: 1, source: "manual", created_at: new Date().toISOString() }]);
     setRoutineName(""); setShowRoutineForm(false); setSaving(false);
   }
 
   async function toggleRoutine(id: string, active: boolean) {
     await api.routines.toggle(id, active).catch(() => {});
-    setRoutines((r) => r.map((x) => x.id === id ? { ...x, active } : x));
+    setRoutines(r => r.map(x => x.id === id ? { ...x, active } : x));
   }
 
   async function deleteRoutine(id: string) {
     await api.routines.delete(id).catch(() => {});
-    setRoutines((r) => r.filter((x) => x.id !== id));
+    setRoutines(r => r.filter(x => x.id !== id));
   }
 
   async function addZone() {
     if (!zoneLabel.trim()) return;
     setSaving(true);
     const { id } = await api.zones.create({ label: zoneLabel, type: zoneType, address: zoneAddress || undefined });
-    setZones((z) => [...z, { id, label: zoneLabel, type: zoneType as Zone["type"], address: zoneAddress || null, lat: null, lng: null, radius_meters: 200, created_at: new Date().toISOString() }]);
+    setZones(z => [...z, { id, label: zoneLabel, type: zoneType as Zone["type"], address: zoneAddress || null, lat: null, lng: null, radius_meters: 200, created_at: new Date().toISOString() }]);
     setZoneLabel(""); setZoneAddress(""); setShowZoneForm(false); setSaving(false);
   }
 
@@ -87,172 +179,148 @@ export default function RoutinesPage() {
     if (!contactName.trim() || !contactLabel.trim()) return;
     setSaving(true);
     const { id } = await api.contacts.create({ label: contactLabel, name: contactName, phone: contactPhone || undefined, notify_mode: contactMode });
-    setContacts((c) => [...c, { id, label: contactLabel, name: contactName, phone: contactPhone || null, notify_mode: contactMode as Contact["notify_mode"], created_at: new Date().toISOString() }]);
+    setContacts(c => [...c, { id, label: contactLabel, name: contactName, phone: contactPhone || null, notify_mode: contactMode as Contact["notify_mode"], created_at: new Date().toISOString() }]);
     setContactLabel(""); setContactName(""); setContactPhone(""); setShowContactForm(false); setSaving(false);
   }
 
-  const deleteBtn: React.CSSProperties = {
-    fontSize: 16, color: colors.faint, background: "none", border: "none", cursor: "pointer", transition: "color 0.15s",
-  };
-
   return (
-    <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", background: V.bg, display: "flex", flexDirection: "column" }}>
       <Nav />
+      <div style={{ maxWidth: 720, margin: "0 auto", width: "100%", padding: "52px 24px" }}>
 
-      <div style={{ maxWidth: 720, margin: "0 auto", width: "100%", padding: "48px 24px" }}>
-        <div style={{ marginBottom: 40 }}>
-          <p style={{ margin: "0 0 6px", fontSize: typography.size.xs, color: colors.muted, fontWeight: typography.weight.bold, letterSpacing: "0.12em" }}>ROUTINES & ZONES</p>
-          <h1 style={{ margin: 0, fontSize: typography.size["2xl"], fontWeight: typography.weight.extrabold, color: colors.white, letterSpacing: "-0.03em" }}>Daily structure</h1>
+        <div style={{ marginBottom: 52 }}>
+          <span style={{ fontFamily: V.mono, fontSize: 10, letterSpacing: "0.2em", color: V.inkFaint, textTransform: "uppercase" }}>routines & zones</span>
+          <h1 style={{ margin: "14px 0 0", fontFamily: V.serif, fontWeight: 400, fontSize: "clamp(32px, 4vw, 44px)", color: V.ink, letterSpacing: "-0.02em", lineHeight: 1 }}>
+            daily structure.
+          </h1>
         </div>
 
         {/* Routines */}
-        <Section title="ROUTINES">
+        <section style={{ marginBottom: 52 }}>
+          <SectionHeader>routines</SectionHeader>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-            {routines.map((r) => (
-              <div key={r.id} style={{
-                background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.md,
-                padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between",
-              }}>
-                <div>
-                  <p style={{ margin: "0 0 2px", fontSize: typography.size.md, fontWeight: typography.weight.normal, color: r.active ? colors.primary : colors.borderStrong }}>{r.name}</p>
-                  <p style={{ margin: 0, fontSize: typography.size.xs, color: colors.muted }}>{r.type}</p>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <button
-                    onClick={() => toggleRoutine(r.id, !r.active)}
-                    style={{
-                      fontSize: 11, padding: "4px 10px", borderRadius: radius.full, cursor: "pointer",
-                      background: r.active ? "rgba(255,255,255,0.08)" : "transparent",
-                      border: "1px solid rgba(255,255,255,0.1)", color: r.active ? colors.primary : colors.muted,
-                      transition: "all 0.15s",
-                    }}
-                  >
-                    {r.active ? "Active" : "Paused"}
-                  </button>
-                  <button onClick={() => deleteRoutine(r.id)} style={deleteBtn}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = colors.error)}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = colors.faint)}>
-                    ×
-                  </button>
-                </div>
-              </div>
+            {routines.map(r => (
+              <ItemRow key={r.id}
+                left={
+                  <>
+                    <p style={{ margin: "0 0 2px", fontSize: 14, color: r.active ? V.ink : V.inkFaint, fontFamily: V.sans }}>{r.name}</p>
+                    <Mono size={10} color={V.inkFaint}>{r.type}</Mono>
+                  </>
+                }
+                right={
+                  <button onClick={() => toggleRoutine(r.id, !r.active)} style={{
+                    fontFamily: V.mono, fontSize: 10, letterSpacing: "0.1em",
+                    padding: "4px 10px", borderRadius: 999, cursor: "pointer",
+                    background: r.active ? V.amberMist : "transparent",
+                    border: `1px solid ${r.active ? V.amberSoft : V.border}`,
+                    color: r.active ? V.amber : V.inkFaint,
+                    transition: "all .15s", textTransform: "uppercase" as const,
+                  }}>{r.active ? "active" : "paused"}</button>
+                }
+                onDelete={() => deleteRoutine(r.id)}
+              />
             ))}
             {routines.length === 0 && !showRoutineForm && (
-              <p style={{ fontSize: typography.size.base, color: colors.borderStrong, margin: 0 }}>No routines yet. Vello will learn them from your behavior, or add one manually.</p>
+              <p style={{ fontFamily: V.serif, fontStyle: "italic", fontSize: 14, color: V.inkFaint, margin: 0 }}>
+                no routines yet. vello will learn them from your behavior, or add one manually.
+              </p>
             )}
           </div>
-
           {showRoutineForm ? (
-            <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.md, padding: 18, display: "flex", flexDirection: "column", gap: 10 }}>
-              <input value={routineName} onChange={(e) => setRoutineName(e.target.value)} placeholder="Routine name (e.g. Evening workout)" style={INPUT} />
-              <select value={routineType} onChange={(e) => setRoutineType(e.target.value)} style={SELECT}>
-                {ROUTINE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={addRoutine} disabled={saving} className="btn-primary" style={{ fontSize: 13 }}>{saving ? "…" : "Add"}</button>
-                <button onClick={() => setShowRoutineForm(false)} className="btn-ghost" style={{ fontSize: 13 }}>Cancel</button>
-              </div>
-            </div>
+            <AddForm
+              fields={<>
+                <input value={routineName} onChange={e => setRoutineName(e.target.value)} placeholder="Routine name (e.g. Evening workout)" style={INPUT} />
+                <select value={routineType} onChange={e => setRoutineType(e.target.value)} style={SELECT}>
+                  {ROUTINE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </>}
+              onSubmit={addRoutine} onCancel={() => setShowRoutineForm(false)} saving={saving}
+            />
           ) : (
-            <button onClick={() => setShowRoutineForm(true)} className="btn-ghost" style={{ fontSize: 13 }}>+ Add routine</button>
+            <AddBtn onClick={() => setShowRoutineForm(true)}>+ add routine</AddBtn>
           )}
-        </Section>
+        </section>
 
         {/* Zones */}
-        <Section title="GEOFENCE ZONES">
-          <p style={{ margin: "0 0 14px", fontSize: typography.size.sm, color: colors.borderStrong, lineHeight: typography.lineHeight.normal }}>
-            Zones let Vello know where you are — when you leave work late, when you arrive at the gym, when you're home.
-            Coordinates come from the Android app; add them here by address for now.
+        <section style={{ marginBottom: 52 }}>
+          <SectionHeader>geofence zones</SectionHeader>
+          <p style={{ margin: "0 0 16px", fontFamily: V.sans, fontSize: 13, color: V.inkDim, lineHeight: 1.55 }}>
+            zones let vello know where you are — when you leave work late, arrive at the gym, when you're home.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-            {zones.map((z) => (
-              <div key={z.id} style={{
-                background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.md,
-                padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between",
-              }}>
-                <div>
-                  <p style={{ margin: "0 0 2px", fontSize: typography.size.md, fontWeight: typography.weight.normal, color: colors.primary }}>{z.label}</p>
-                  <p style={{ margin: 0, fontSize: typography.size.xs, color: colors.muted }}>
-                    {z.type}{z.address ? ` · ${z.address}` : ""}
-                  </p>
-                </div>
-                <button onClick={() => { api.zones.delete(z.id); setZones((x) => x.filter((i) => i.id !== z.id)); }}
-                  style={deleteBtn}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = colors.error)}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = colors.faint)}>
-                  ×
-                </button>
-              </div>
+            {zones.map(z => (
+              <ItemRow key={z.id}
+                left={
+                  <>
+                    <p style={{ margin: "0 0 2px", fontSize: 14, color: V.ink, fontFamily: V.sans }}>{z.label}</p>
+                    <Mono size={10} color={V.inkFaint}>{z.type}{z.address ? ` · ${z.address}` : ""}</Mono>
+                  </>
+                }
+                onDelete={() => { api.zones.delete(z.id); setZones(x => x.filter(i => i.id !== z.id)); }}
+              />
             ))}
             {zones.length === 0 && !showZoneForm && (
-              <p style={{ fontSize: typography.size.base, color: colors.borderStrong, margin: 0 }}>No zones yet. The Android app will add these automatically.</p>
+              <p style={{ fontFamily: V.serif, fontStyle: "italic", fontSize: 14, color: V.inkFaint, margin: 0 }}>
+                no zones yet. the android app will add these automatically.
+              </p>
             )}
           </div>
-
           {showZoneForm ? (
-            <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.md, padding: 18, display: "flex", flexDirection: "column", gap: 10 }}>
-              <input value={zoneLabel} onChange={(e) => setZoneLabel(e.target.value)} placeholder="Label (e.g. Home, Office)" style={INPUT} />
-              <select value={zoneType} onChange={(e) => setZoneType(e.target.value)} style={SELECT}>
-                {ZONE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <input value={zoneAddress} onChange={(e) => setZoneAddress(e.target.value)} placeholder="Address (optional)" style={INPUT} />
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={addZone} disabled={saving} className="btn-primary" style={{ fontSize: 13 }}>{saving ? "…" : "Add zone"}</button>
-                <button onClick={() => setShowZoneForm(false)} className="btn-ghost" style={{ fontSize: 13 }}>Cancel</button>
-              </div>
-            </div>
+            <AddForm
+              fields={<>
+                <input value={zoneLabel} onChange={e => setZoneLabel(e.target.value)} placeholder="Label (e.g. Home, Office)" style={INPUT} />
+                <select value={zoneType} onChange={e => setZoneType(e.target.value)} style={SELECT}>
+                  {ZONE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <input value={zoneAddress} onChange={e => setZoneAddress(e.target.value)} placeholder="Address (optional)" style={INPUT} />
+              </>}
+              onSubmit={addZone} onCancel={() => setShowZoneForm(false)} saving={saving}
+            />
           ) : (
-            <button onClick={() => setShowZoneForm(true)} className="btn-ghost" style={{ fontSize: 13 }}>+ Add zone</button>
+            <AddBtn onClick={() => setShowZoneForm(true)}>+ add zone</AddBtn>
           )}
-        </Section>
+        </section>
 
         {/* Contacts */}
-        <Section title="KEY CONTACTS">
-          <p style={{ margin: "0 0 14px", fontSize: typography.size.sm, color: colors.borderStrong, lineHeight: typography.lineHeight.normal }}>
-            People Vello can loop in when relevant — like letting your partner know you're working late.
-            Vello never contacts anyone without your approval unless you choose auto-send.
+        <section style={{ marginBottom: 40 }}>
+          <SectionHeader>key contacts</SectionHeader>
+          <p style={{ margin: "0 0 16px", fontFamily: V.sans, fontSize: 13, color: V.inkDim, lineHeight: 1.55 }}>
+            people vello can loop in when relevant. vello never contacts anyone without your approval unless you choose auto-send.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-            {contacts.map((c) => (
-              <div key={c.id} style={{
-                background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.md,
-                padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between",
-              }}>
-                <div>
-                  <p style={{ margin: "0 0 2px", fontSize: typography.size.md, fontWeight: typography.weight.normal, color: colors.primary }}>{c.name}
-                    <span style={{ marginLeft: 8, fontSize: 11, color: colors.borderStrong }}>{c.label}</span>
-                  </p>
-                  <p style={{ margin: 0, fontSize: typography.size.xs, color: colors.muted }}>
-                    {c.phone ?? "No phone"} · {NOTIFY_MODES.find((m) => m.value === c.notify_mode)?.label}
-                  </p>
-                </div>
-                <button onClick={() => { api.contacts.delete(c.id); setContacts((x) => x.filter((i) => i.id !== c.id)); }}
-                  style={deleteBtn}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = colors.error)}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = colors.faint)}>
-                  ×
-                </button>
-              </div>
+            {contacts.map(c => (
+              <ItemRow key={c.id}
+                left={
+                  <>
+                    <p style={{ margin: "0 0 2px", fontSize: 14, color: V.ink, fontFamily: V.sans }}>
+                      {c.name}
+                      <Mono size={10} color={V.inkFaint} style={{ marginLeft: 8 }}>{c.label}</Mono>
+                    </p>
+                    <Mono size={10} color={V.inkFaint}>
+                      {c.phone ?? "no phone"} · {NOTIFY_MODES.find(m => m.value === c.notify_mode)?.label}
+                    </Mono>
+                  </>
+                }
+                onDelete={() => { api.contacts.delete(c.id); setContacts(x => x.filter(i => i.id !== c.id)); }}
+              />
             ))}
           </div>
-
           {showContactForm ? (
-            <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.md, padding: 18, display: "flex", flexDirection: "column", gap: 10 }}>
-              <input value={contactLabel} onChange={(e) => setContactLabel(e.target.value)} placeholder="Label (e.g. Partner, Mom)" style={INPUT} />
-              <input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Name" style={INPUT} />
-              <input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="Phone number (optional)" style={INPUT} />
-              <select value={contactMode} onChange={(e) => setContactMode(e.target.value)} style={SELECT}>
-                {NOTIFY_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={addContact} disabled={saving} className="btn-primary" style={{ fontSize: 13 }}>{saving ? "…" : "Add contact"}</button>
-                <button onClick={() => setShowContactForm(false)} className="btn-ghost" style={{ fontSize: 13 }}>Cancel</button>
-              </div>
-            </div>
+            <AddForm
+              fields={<>
+                <input value={contactLabel} onChange={e => setContactLabel(e.target.value)} placeholder="Label (e.g. Partner, Mom)" style={INPUT} />
+                <input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Name" style={INPUT} />
+                <input value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="Phone number (optional)" style={INPUT} />
+                <select value={contactMode} onChange={e => setContactMode(e.target.value)} style={SELECT}>
+                  {NOTIFY_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </>}
+              onSubmit={addContact} onCancel={() => setShowContactForm(false)} saving={saving}
+            />
           ) : (
-            <button onClick={() => setShowContactForm(true)} className="btn-ghost" style={{ fontSize: 13 }}>+ Add contact</button>
+            <AddBtn onClick={() => setShowContactForm(true)}>+ add contact</AddBtn>
           )}
-        </Section>
+        </section>
       </div>
     </div>
   );

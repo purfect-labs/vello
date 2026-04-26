@@ -4,82 +4,55 @@ import Nav from "../components/Nav";
 import { useAuth } from "../App";
 import { api } from "../api";
 import type { BehavioralGap, PendingInference, SignalTrigger, TemporalDeviation } from "../types";
-import { colors, typography, radius, surfaces } from "../design-system";
+import { V } from "../vello-tokens";
 
-function InferenceCard({ inf, onConfirm, onDismiss }: {
-  inf: PendingInference;
-  onConfirm: () => void;
-  onDismiss: () => void;
+function Mono({ children, size = 10, color, style }: {
+  children: React.ReactNode; size?: number; color?: string; style?: React.CSSProperties;
 }) {
   return (
-    <div style={{
-      ...surfaces.signal,
-      display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16,
-    }}>
-      <div>
-        <p style={{ margin: "0 0 4px", fontSize: typography.size.xs, color: colors.muted, letterSpacing: "0.1em", fontWeight: typography.weight.bold }}>VELLO NOTICED</p>
-        <p style={{ margin: 0, fontSize: typography.size.md, color: colors.primary, lineHeight: typography.lineHeight.normal }}>{inf.description}</p>
-      </div>
-      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-        <button onClick={onConfirm} className="btn-primary" style={{ fontSize: 12, padding: "6px 14px" }}>Looks right</button>
-        <button onClick={onDismiss} className="btn-ghost"   style={{ fontSize: 12, padding: "5px 12px" }}>No</button>
-      </div>
-    </div>
+    <span style={{ fontFamily: V.mono, fontSize: size, color: color || V.inkDim, letterSpacing: "0.04em", ...style }}>
+      {children}
+    </span>
   );
 }
 
-const PRIORITY_DOT: Record<string, string> = {
-  high:   colors.error,
-  medium: colors.warning,
-  low:    colors.muted,
-};
-
-function SignalCard({ signal, onConfirm, onDismiss }: {
-  signal: SignalTrigger;
-  onConfirm: () => void;
-  onDismiss: () => void;
-}) {
+function Dot({ color = V.amber, size = 6 }: { color?: string; size?: number }) {
   return (
-    <div style={{
-      ...surfaces.signal,
-      display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16,
-    }}>
-      <div style={{ flex: 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-          <span style={{
-            width: 7, height: 7, borderRadius: "50%",
-            background: PRIORITY_DOT[signal.priority] ?? colors.muted,
-            flexShrink: 0, display: "inline-block",
-          }} />
-          <p style={{ margin: 0, fontSize: typography.size.xs, color: colors.muted, letterSpacing: "0.1em", fontWeight: typography.weight.bold }}>
-            {signal.label.toUpperCase()}
-          </p>
-        </div>
-        <p style={{ margin: 0, fontSize: typography.size.md, color: colors.primary, lineHeight: typography.lineHeight.normal }}>
-          {signal.trigger_message}
-        </p>
-      </div>
-      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-        <button onClick={onConfirm} className="btn-primary" style={{ fontSize: 12, padding: "6px 14px" }}>Yes</button>
-        <button onClick={onDismiss} className="btn-ghost"   style={{ fontSize: 12, padding: "5px 12px" }}>Later</button>
-      </div>
-    </div>
+    <span style={{
+      width: size, height: size, borderRadius: "50%", background: color,
+      display: "inline-block", boxShadow: `0 0 ${size * 2}px ${color}`,
+      animation: "velloDot 2.4s ease-in-out infinite", flexShrink: 0,
+    }} />
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <Mono size={10} color={V.inkFaint} style={{ letterSpacing: "0.2em", textTransform: "uppercase", display: "block", marginBottom: 12 }}>
+      {children}
+    </Mono>
   );
 }
 
 function DeviationCard({ dev }: { dev: TemporalDeviation }) {
   return (
     <div style={{
-      background: colors.surface, border: "1px solid rgba(245,158,11,0.2)",
-      borderRadius: radius.md, padding: "14px 20px",
-      display: "flex", alignItems: "center", gap: 16,
+      display: "flex", alignItems: "center", gap: 18,
+      padding: "16px 20px", borderRadius: 12,
+      background: V.surface, border: `1px solid ${V.amberSoft}`,
+      borderLeft: `2px solid ${V.amber}`,
     }}>
-      <span style={{ fontSize: 18, flexShrink: 0, color: colors.warning }}>◷</span>
-      <div>
-        <p style={{ margin: "0 0 2px", fontSize: typography.size.base, fontWeight: typography.weight.semibold, color: colors.primary }}>{dev.message}</p>
-        <p style={{ margin: 0, fontSize: typography.size.xs, color: colors.muted }}>
-          {dev.late_by_minutes} min late · usually {dev.expected_time}
-        </p>
+      <div style={{
+        width: 34, height: 34, borderRadius: "50%",
+        display: "grid", placeItems: "center",
+        background: V.amberMist, border: `1px solid ${V.amberSoft}`,
+        color: V.amber, fontSize: 16, flexShrink: 0,
+      }}>◷</div>
+      <div style={{ flex: 1 }}>
+        <p style={{ margin: "0 0 3px", fontSize: 15, color: V.ink, fontFamily: V.sans }}>{dev.message}</p>
+        <Mono size={10} color={V.inkFaint}>
+          +{dev.late_by_minutes} min late · usually {dev.expected_time}
+        </Mono>
       </div>
     </div>
   );
@@ -87,17 +60,124 @@ function DeviationCard({ dev }: { dev: TemporalDeviation }) {
 
 function GapCard({ gap }: { gap: BehavioralGap }) {
   return (
-    <div style={{ ...surfaces.gap, display: "flex", alignItems: "flex-start", gap: 12 }}>
-      <span style={{ fontSize: 14, flexShrink: 0, color: colors.warning, marginTop: 1 }}>◎</span>
+    <div style={{
+      padding: "14px 18px", borderRadius: 12,
+      background: V.amberMist, border: `1px solid ${V.amberSoft}`,
+      display: "flex", gap: 12, alignItems: "flex-start",
+    }}>
+      <span style={{ color: V.amber, fontSize: 13, marginTop: 2, flexShrink: 0 }}>◎</span>
       <div>
-        <p style={{ margin: "0 0 3px", fontSize: typography.size.xs, color: colors.warning, fontWeight: typography.weight.bold, letterSpacing: "0.08em" }}>
-          {gap.domain.toUpperCase()} · {gap.type.replace(/_/g, " ").toUpperCase()}
-        </p>
-        <p style={{ margin: 0, fontSize: typography.size.md, color: colors.primary, lineHeight: typography.lineHeight.normal }}>
-          {gap.description}
-        </p>
+        <Mono size={10} color={V.amber} style={{ letterSpacing: "0.16em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>
+          {gap.domain} · {gap.type.replace(/_/g, " ")}
+        </Mono>
+        <p style={{ margin: 0, fontSize: 14, color: V.ink, lineHeight: 1.5, fontFamily: V.sans }}>{gap.description}</p>
       </div>
     </div>
+  );
+}
+
+function SignalCard({ signal, onConfirm, onDismiss }: {
+  signal: SignalTrigger; onConfirm: () => void; onDismiss: () => void;
+}) {
+  const priorityColor: Record<string, string> = { high: V.amber, medium: V.amber, low: V.inkDim };
+  return (
+    <div style={{
+      padding: "16px 20px", borderRadius: 12,
+      background: V.surface, border: `1px solid ${V.border}`,
+      display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16,
+    }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <Dot color={priorityColor[signal.priority] ?? V.inkDim} size={6} />
+          <Mono size={10} style={{ letterSpacing: "0.16em", textTransform: "uppercase", color: V.inkDim }}>{signal.label}</Mono>
+        </div>
+        <p style={{ margin: 0, fontSize: 14, color: V.ink, lineHeight: 1.5, fontFamily: V.sans }}>{signal.trigger_message}</p>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <ActionBtn onClick={onConfirm}>yes</ActionBtn>
+        <GhostBtn onClick={onDismiss}>later</GhostBtn>
+      </div>
+    </div>
+  );
+}
+
+function InferenceCard({ inf, onConfirm, onDismiss }: {
+  inf: PendingInference; onConfirm: () => void; onDismiss: () => void;
+}) {
+  return (
+    <div style={{
+      padding: "16px 20px", borderRadius: 12,
+      background: V.surface,
+      border: `1px solid ${V.border}`,
+      borderTop: `1px solid ${V.obsSoft}`,
+      display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16,
+    }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <Dot color={V.obs} size={6} />
+          <Mono size={10} color={V.obs} style={{ letterSpacing: "0.16em", textTransform: "uppercase" }}>vello noticed</Mono>
+        </div>
+        <p style={{ margin: 0, fontSize: 14, color: V.ink, lineHeight: 1.5, fontFamily: V.serif, fontStyle: "italic" }}>{inf.description}</p>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <ActionBtn onClick={onConfirm}>looks right</ActionBtn>
+        <GhostBtn onClick={onDismiss}>no</GhostBtn>
+      </div>
+    </div>
+  );
+}
+
+function ActionBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        fontFamily: V.sans, fontSize: 12, fontWeight: 600,
+        color: "#100c06", background: V.ink,
+        border: "none", borderRadius: 999, padding: "6px 14px",
+        cursor: "pointer",
+        boxShadow: hover ? "0 4px 16px rgba(245,158,11,0.2)" : "none",
+        transition: "box-shadow .2s",
+      }}>{children}</button>
+  );
+}
+
+function GhostBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        fontFamily: V.sans, fontSize: 12, fontWeight: 500,
+        color: V.ink, background: "transparent",
+        border: `1px solid ${hover ? V.borderHi : V.border}`,
+        borderRadius: 999, padding: "5px 12px",
+        cursor: "pointer", transition: "border-color .2s",
+      }}>{children}</button>
+  );
+}
+
+function QuickCard({ to, icon, title, desc }: { to: string; icon: string; title: string; desc: string }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <Link to={to} style={{ textDecoration: "none" }}>
+      <div
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          background: hover ? V.surfaceHi : V.surface,
+          border: `1px solid ${hover ? V.borderHi : V.border}`,
+          borderRadius: 14, padding: "20px 22px",
+          transition: "background .2s, border-color .2s", cursor: "pointer",
+        }}>
+        <p style={{ margin: "0 0 10px", fontSize: 20, color: V.amber }}>{icon}</p>
+        <p style={{ margin: "0 0 4px", fontFamily: V.serif, fontSize: 17, color: V.ink }}>{title}</p>
+        <p style={{ margin: 0, fontFamily: V.sans, fontSize: 13, color: V.inkDim, lineHeight: 1.45 }}>{desc}</p>
+      </div>
+    </Link>
   );
 }
 
@@ -109,70 +189,72 @@ export default function DashboardPage() {
   const [gaps, setGaps]             = useState<BehavioralGap[]>([]);
 
   useEffect(() => {
-    api.inferences.list().then((r) => setInferences(r as PendingInference[])).catch(() => {});
+    api.inferences.list().then(r => setInferences(r as PendingInference[])).catch(() => {});
     api.signals.list().then(setSignals).catch(() => {});
     api.temporal.deviations().then(setDeviations).catch(() => {});
-    api.gaps.list().then((g) => setGaps(g as BehavioralGap[])).catch(() => {});
+    api.gaps.list().then(g => setGaps(g as BehavioralGap[])).catch(() => {});
   }, []);
 
   async function confirmInference(id: string) {
     await api.inferences.confirm(id).catch(() => {});
-    setInferences((p) => p.filter((i) => i.id !== id));
+    setInferences(p => p.filter(i => i.id !== id));
   }
-
   async function dismissInference(id: string) {
     await api.inferences.dismiss(id).catch(() => {});
-    setInferences((p) => p.filter((i) => i.id !== id));
+    setInferences(p => p.filter(i => i.id !== id));
   }
-
   async function confirmSignal(id: string) {
     await api.signals.confirm(id).catch(() => {});
-    setSignals((p) => p.filter((s) => s.id !== id));
+    setSignals(p => p.filter(s => s.id !== id));
   }
-
   async function dismissSignal(id: string) {
     await api.signals.dismiss(id).catch(() => {});
-    setSignals((p) => p.filter((s) => s.id !== id));
+    setSignals(p => p.filter(s => s.id !== id));
   }
 
   const hour     = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  const hasAlerts = deviations.length > 0 || gaps.length > 0 || signals.length > 0 || inferences.length > 0;
+  const greeting = hour < 12 ? "good morning" : hour < 17 ? "good afternoon" : "good evening";
+  const dateStr  = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const hasAlerts = deviations.length + gaps.length + signals.length + inferences.length > 0;
+  const totalItems = deviations.length + gaps.length + signals.length + inferences.length;
 
   return (
-    <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", background: V.bg, display: "flex", flexDirection: "column" }}>
       <Nav />
-
-      <div style={{ maxWidth: 760, margin: "0 auto", padding: "48px 24px", width: "100%" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto", padding: "52px 24px", width: "100%" }}>
 
         {/* Greeting */}
-        <div style={{ marginBottom: hasAlerts ? 36 : 48 }}>
-          <p style={{ margin: "0 0 6px", fontSize: typography.size.xs, color: colors.muted, fontWeight: typography.weight.bold, letterSpacing: "0.12em" }}>
-            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }).toUpperCase()}
-          </p>
-          <h1 style={{ margin: 0, fontSize: typography.size["3xl"], fontWeight: typography.weight.extrabold, color: colors.white, letterSpacing: "-0.03em" }}>
-            {greeting}.
+        <div style={{ marginBottom: hasAlerts ? 48 : 64 }}>
+          <Mono size={10} color={V.inkFaint} style={{ letterSpacing: "0.2em", textTransform: "uppercase", display: "block", marginBottom: 14 }}>
+            {dateStr.toUpperCase()}
+          </Mono>
+          <h1 style={{
+            margin: "0 0 10px", fontFamily: V.serif, fontWeight: 400,
+            fontSize: "clamp(40px, 5vw, 60px)", letterSpacing: "-0.02em", lineHeight: 1, color: V.ink,
+          }}>
+            {greeting}{user?.email ? `, ${user.email.split("@")[0]}` : ""}.
           </h1>
+          <p style={{ margin: 0, fontFamily: V.serif, fontStyle: "italic", fontSize: 16, color: V.inkDim }}>
+            {totalItems > 0
+              ? `${totalItems} thing${totalItems !== 1 ? "s" : ""} to know.`
+              : "nothing to surface right now."}
+          </p>
         </div>
 
         {/* Temporal deviations */}
         {deviations.length > 0 && (
-          <section style={{ marginBottom: 28 }}>
-            <p style={{ margin: "0 0 12px", fontSize: typography.size.xs, color: colors.muted, fontWeight: typography.weight.bold, letterSpacing: "0.1em" }}>
-              RUNNING LATE
-            </p>
+          <section style={{ marginBottom: 32 }}>
+            <SectionLabel>running late</SectionLabel>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {deviations.map((d) => <DeviationCard key={d.pattern_key} dev={d} />)}
+              {deviations.map(d => <DeviationCard key={d.pattern_key} dev={d} />)}
             </div>
           </section>
         )}
 
         {/* Behavioral gaps */}
         {gaps.length > 0 && (
-          <section style={{ marginBottom: 28 }}>
-            <p style={{ margin: "0 0 12px", fontSize: typography.size.xs, color: colors.muted, fontWeight: typography.weight.bold, letterSpacing: "0.1em" }}>
-              PATTERNS VELLO NOTICED
-            </p>
+          <section style={{ marginBottom: 32 }}>
+            <SectionLabel>patterns vello noticed</SectionLabel>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {gaps.map((g, i) => <GapCard key={i} gap={g} />)}
             </div>
@@ -181,12 +263,10 @@ export default function DashboardPage() {
 
         {/* Signal triggers */}
         {signals.length > 0 && (
-          <section style={{ marginBottom: 28 }}>
-            <p style={{ margin: "0 0 12px", fontSize: typography.size.xs, color: colors.muted, fontWeight: typography.weight.bold, letterSpacing: "0.1em" }}>
-              VELLO DETECTED
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {signals.map((s) => (
+          <section style={{ marginBottom: 32 }}>
+            <SectionLabel>vello detected</SectionLabel>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {signals.map(s => (
                 <SignalCard key={s.id} signal={s}
                   onConfirm={() => confirmSignal(s.id)}
                   onDismiss={() => dismissSignal(s.id)} />
@@ -198,11 +278,9 @@ export default function DashboardPage() {
         {/* Pending inferences */}
         {inferences.length > 0 && (
           <section style={{ marginBottom: 40 }}>
-            <p style={{ margin: "0 0 16px", fontSize: typography.size.xs, color: colors.muted, fontWeight: typography.weight.bold, letterSpacing: "0.1em" }}>
-              CONFIRM WHAT VELLO LEARNED
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {inferences.map((inf) => (
+            <SectionLabel>confirm what vello learned</SectionLabel>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {inferences.map(inf => (
                 <InferenceCard key={inf.id} inf={inf}
                   onConfirm={() => confirmInference(inf.id)}
                   onDismiss={() => dismissInference(inf.id)} />
@@ -211,60 +289,37 @@ export default function DashboardPage() {
           </section>
         )}
 
+        {/* Divider */}
+        <div style={{ height: 1, background: V.hairline, margin: "0 0 40px" }} />
+
         {/* Quick access */}
         <section style={{ marginBottom: 40 }}>
-          <p style={{ margin: "0 0 16px", fontSize: typography.size.xs, color: colors.muted, fontWeight: typography.weight.bold, letterSpacing: "0.1em" }}>QUICK ACCESS</p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            {[
-              { to: "/dialogue", icon: "◎", title: "Talk to Vello",  desc: "Build your profile through conversation" },
-              { to: "/profile",  icon: "◈", title: "Life Context",   desc: "View and edit what Vello knows about you" },
-              { to: "/routines", icon: "◇", title: "Routines",       desc: "Manage your daily and weekly routines" },
-              { to: "/settings", icon: "○", title: "Settings",       desc: "Connect Kortex and configure Vello" },
-            ].map(({ to, icon, title, desc }) => (
-              <Link key={to} to={to} style={{ textDecoration: "none" }}>
-                <div style={{
-                  background: colors.surface, border: `1px solid ${colors.border}`,
-                  borderRadius: radius.lg, padding: "20px 22px",
-                  transition: "border-color 0.15s, background 0.15s", cursor: "pointer",
-                }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = colors.borderHover;
-                    (e.currentTarget as HTMLElement).style.background  = colors.surfaceHover;
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = colors.border;
-                    (e.currentTarget as HTMLElement).style.background  = colors.surface;
-                  }}
-                >
-                  <p style={{ margin: "0 0 8px", fontSize: 18, color: colors.white }}>{icon}</p>
-                  <p style={{ margin: "0 0 4px", fontSize: typography.size.md, fontWeight: typography.weight.semibold, color: colors.primary }}>{title}</p>
-                  <p style={{ margin: 0, fontSize: typography.size.sm, color: colors.muted, lineHeight: typography.lineHeight.normal }}>{desc}</p>
-                </div>
-              </Link>
-            ))}
+          <SectionLabel>quick access</SectionLabel>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <QuickCard to="/dialogue" icon="◎" title="Dialogue"    desc="Talk to Vello. Build your profile through conversation." />
+            <QuickCard to="/profile"  icon="◈" title="Life Context" desc="View and edit what Vello knows about you." />
+            <QuickCard to="/routines" icon="◇" title="Routines"     desc="Manage your daily and weekly routines." />
+            <QuickCard to="/settings" icon="○" title="Settings"     desc="Connect Kortex and configure Vello." />
           </div>
         </section>
 
         {/* Onboarding nudge */}
         {!user?.onboarding_complete && (
           <div style={{
-            ...surfaces.panel,
-            border: "1px solid rgba(255,255,255,0.12)",
-            padding: "20px 24px",
+            padding: "20px 24px", borderRadius: 14,
+            background: V.amberMist, border: `1px solid ${V.amberSoft}`,
             display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16,
           }}>
             <div>
-              <p style={{ margin: "0 0 4px", fontSize: typography.size.md, fontWeight: typography.weight.semibold, color: colors.primary }}>
-                Introduce yourself to Vello
+              <p style={{ margin: "0 0 4px", fontFamily: V.serif, fontSize: 17, color: V.ink }}>
+                introduce yourself to vello
               </p>
-              <p style={{ margin: 0, fontSize: typography.size.base, color: colors.muted, lineHeight: typography.lineHeight.normal }}>
-                A quick three-question conversation gets you up and running. Vello learns the rest over time.
+              <p style={{ margin: 0, fontFamily: V.sans, fontSize: 13, color: V.inkDim, lineHeight: 1.5 }}>
+                a short conversation gets you up and running. vello learns the rest over time.
               </p>
             </div>
-            <Link to="/dialogue">
-              <button className="btn-primary" style={{ fontSize: 13, whiteSpace: "nowrap" }}>
-                Get started →
-              </button>
+            <Link to="/dialogue" style={{ textDecoration: "none" }}>
+              <ActionBtn onClick={() => {}}>get started →</ActionBtn>
             </Link>
           </div>
         )}

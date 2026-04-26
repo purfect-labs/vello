@@ -1,29 +1,8 @@
 import { useState, useEffect, useRef } from "react";
+import { V } from "../vello-tokens";
 
-// ── Design tokens ──────────────────────────────────────────────
-const V = {
-  bg: "#000000",
-  surface: "#0a0907",
-  surfaceHi: "#0f0d0a",
-  surfaceLo: "#060503",
-  border: "rgba(255,255,255,0.06)",
-  borderHi: "rgba(255,255,255,0.14)",
-  hairline: "rgba(255,255,255,0.04)",
-  ink: "#f6f3ee",
-  inkDim: "#8c8680",
-  inkFaint: "#3a3733",
-  amber: "#f59e0b",
-  amberSoft: "rgba(245,158,11,0.14)",
-  amberGlow: "rgba(245,158,11,0.45)",
-  amberMist: "rgba(245,158,11,0.06)",
-  obs: "oklch(0.82 0.07 215)",
-  obsSoft: "color-mix(in oklch, oklch(0.82 0.07 215) 14%, transparent)",
-  obsMist: "color-mix(in oklch, oklch(0.82 0.07 215) 5%, transparent)",
-  good: "#7fcaa0",
-  serif: '"Instrument Serif", "GT Sectra", Georgia, serif',
-  sans: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-  mono: '"JetBrains Mono", "SF Mono", Menlo, ui-monospace, monospace',
-};
+// Extend V with landing-only tokens
+const obsMist = "color-mix(in oklch, oklch(0.82 0.07 215) 5%, transparent)";
 
 // ── Atoms ──────────────────────────────────────────────────────
 
@@ -757,7 +736,7 @@ function PatternViz() {
       <div style={{ position: "relative", height: 120, marginBottom: 28 }}>
         <div style={{
           position: "absolute", left: `${norm(mean - std)}%`, width: `${norm(mean + std) - norm(mean - std)}%`,
-          top: 0, bottom: 0, background: V.obsMist,
+          top: 0, bottom: 0, background: obsMist,
           border: `1px solid ${V.obsSoft}`, borderRadius: 4,
         }} />
         <div style={{
