@@ -2,18 +2,19 @@ import { useState } from "react";
 import Nav from "../components/Nav";
 import { api } from "../api";
 import { useAuth } from "../App";
+import { colors, typography, radius } from "../design-system";
 
 const INPUT: React.CSSProperties = {
-  background: "#0a0a0a", border: "1px solid #1c1c1c", borderRadius: 10,
-  padding: "11px 14px", fontSize: 14, color: "#f5f5f5", outline: "none",
+  background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.md,
+  padding: "11px 14px", fontSize: typography.size.md, color: colors.primary, outline: "none",
   width: "100%", transition: "border-color 0.15s", fontFamily: "inherit",
 };
 
 function SettingCard({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: "#0a0a0a", border: "1px solid #1c1c1c", borderRadius: 14, padding: "24px 24px", marginBottom: 16 }}>
-      <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600, color: "#f5f5f5" }}>{title}</p>
-      <p style={{ margin: "0 0 20px", fontSize: 13, color: "#505050", lineHeight: 1.5 }}>{description}</p>
+    <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.lg, padding: "24px", marginBottom: 16 }}>
+      <p style={{ margin: "0 0 4px", fontSize: typography.size.md, fontWeight: typography.weight.semibold, color: colors.primary }}>{title}</p>
+      <p style={{ margin: "0 0 20px", fontSize: typography.size.base, color: colors.muted, lineHeight: typography.lineHeight.normal }}>{description}</p>
       {children}
     </div>
   );
@@ -27,7 +28,7 @@ export default function SettingsPage() {
   const [connectError, setConnectError] = useState("");
   const [connectOk, setConnectOk]       = useState(false);
 
-  const [importing, setImporting]     = useState(false);
+  const [importing, setImporting]       = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; email: string } | null>(null);
 
   const [disconnecting, setDisconnecting] = useState(false);
@@ -43,8 +44,8 @@ export default function SettingsPage() {
     } catch (err: unknown) {
       const detail = (err as { detail?: string }).detail ?? "request_failed";
       setConnectError(
-        detail === "kortex_token_invalid" ? "Token not recognized by Kortex." :
-        detail === "invalid_token_format" ? "Token must start with ktx_" :
+        detail === "kortex_token_invalid"  ? "Token not recognized by Kortex." :
+        detail === "invalid_token_format"  ? "Token must start with ktx_" :
         "Could not connect. Check your token and try again."
       );
     } finally {
@@ -74,13 +75,13 @@ export default function SettingsPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", flexDirection: "column" }}>
       <Nav />
 
       <div style={{ maxWidth: 640, margin: "0 auto", width: "100%", padding: "48px 24px" }}>
         <div style={{ marginBottom: 40 }}>
-          <p style={{ margin: "0 0 6px", fontSize: 11, color: "#505050", fontWeight: 700, letterSpacing: "0.12em" }}>SETTINGS</p>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: "#fff", letterSpacing: "-0.03em" }}>Configure Vello</h1>
+          <p style={{ margin: "0 0 6px", fontSize: typography.size.xs, color: colors.muted, fontWeight: typography.weight.bold, letterSpacing: "0.12em" }}>SETTINGS</p>
+          <h1 style={{ margin: 0, fontSize: typography.size["2xl"], fontWeight: typography.weight.extrabold, color: colors.white, letterSpacing: "-0.03em" }}>Configure Vello</h1>
         </div>
 
         {/* Kortex connection */}
@@ -91,12 +92,12 @@ export default function SettingsPage() {
           {user?.has_kortex ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
-                <span style={{ fontSize: 13, color: "#f5f5f5" }}>Kortex connected</span>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: colors.success, display: "inline-block" }} />
+                <span style={{ fontSize: typography.size.base, color: colors.primary }}>Kortex connected</span>
               </div>
 
               {importResult && (
-                <p style={{ fontSize: 13, color: "#888", margin: 0 }}>
+                <p style={{ fontSize: typography.size.base, color: colors.muted, margin: 0 }}>
                   ✓ Imported {importResult.imported} context entries from {importResult.email}
                 </p>
               )}
@@ -113,11 +114,11 @@ export default function SettingsPage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
-                <label style={{ fontSize: 12, color: "#505050", display: "block", marginBottom: 6 }}>
+                <label style={{ fontSize: typography.size.sm, color: colors.muted, display: "block", marginBottom: 6 }}>
                   Kortex API token
                 </label>
-                <p style={{ fontSize: 11, color: "#333", margin: "0 0 8px", lineHeight: 1.5 }}>
-                  Find yours in Kortex → Profile → API Token. Starts with <code style={{ color: "#555" }}>ktx_</code>
+                <p style={{ fontSize: typography.size.xs, color: colors.borderStrong, margin: "0 0 8px", lineHeight: typography.lineHeight.normal }}>
+                  Find yours in Kortex → Profile → API Token. Starts with <code style={{ color: colors.muted }}>ktx_</code>
                 </p>
                 <input
                   type="password"
@@ -125,13 +126,13 @@ export default function SettingsPage() {
                   onChange={(e) => setKortexToken(e.target.value)}
                   placeholder="ktx_…"
                   style={INPUT}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = "#333")}
-                  onBlur={(e) => (e.currentTarget.style.borderColor = "#1c1c1c")}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = colors.borderStrong)}
+                  onBlur={(e)  => (e.currentTarget.style.borderColor = colors.border)}
                 />
               </div>
 
-              {connectError && <p style={{ fontSize: 12, color: "#ef4444", margin: 0 }}>{connectError}</p>}
-              {connectOk    && <p style={{ fontSize: 12, color: "#22c55e", margin: 0 }}>Connected successfully.</p>}
+              {connectError && <p style={{ fontSize: typography.size.sm, color: colors.error, margin: 0 }}>{connectError}</p>}
+              {connectOk    && <p style={{ fontSize: typography.size.sm, color: colors.success, margin: 0 }}>Connected successfully.</p>}
 
               <button onClick={connectKortex} disabled={connecting || !kortexToken.trim()} className="btn-primary" style={{ fontSize: 13, alignSelf: "flex-start" }}>
                 {connecting ? "Connecting…" : "Connect Kortex →"}
@@ -145,7 +146,7 @@ export default function SettingsPage() {
           title="Account"
           description="Your Vello account details."
         >
-          <p style={{ margin: 0, fontSize: 14, color: "#f5f5f5" }}>{user?.email}</p>
+          <p style={{ margin: 0, fontSize: typography.size.md, color: colors.primary }}>{user?.email}</p>
         </SettingCard>
 
         {/* Android app */}
@@ -155,10 +156,11 @@ export default function SettingsPage() {
         >
           <div style={{
             display: "flex", alignItems: "center", gap: 8, padding: "10px 16px",
-            border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, alignSelf: "flex-start", width: "fit-content",
+            border: `1px solid rgba(255,255,255,0.08)`, borderRadius: radius.md,
+            alignSelf: "flex-start", width: "fit-content",
           }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#fff", display: "inline-block" }} className="animate-pulse" />
-            <span style={{ fontSize: 12, color: "#888", fontWeight: 600 }}>Android app — coming soon</span>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: colors.white, display: "inline-block" }} className="animate-pulse" />
+            <span style={{ fontSize: typography.size.sm, color: colors.muted, fontWeight: typography.weight.semibold }}>Android app — coming soon</span>
           </div>
         </SettingCard>
       </div>

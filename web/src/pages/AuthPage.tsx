@@ -2,12 +2,13 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../App";
+import { colors, typography, radius } from "../design-system";
 
 type Mode = "login" | "register";
 
 const INPUT: React.CSSProperties = {
-  width: "100%", background: "#0a0a0a", border: "1px solid #1c1c1c",
-  borderRadius: 10, padding: "11px 14px", fontSize: 14, color: "#f5f5f5",
+  width: "100%", background: colors.surface, border: `1px solid ${colors.border}`,
+  borderRadius: radius.md, padding: "11px 14px", fontSize: typography.size.md, color: colors.primary,
   outline: "none", transition: "border-color 0.15s",
 };
 
@@ -47,22 +48,23 @@ export default function AuthPage({ mode: initial = "login" }: { mode?: Mode }) {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ width: "100%", maxWidth: 360 }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <p style={{ color: "#fff", fontWeight: 800, letterSpacing: "0.3em", fontSize: 16, margin: 0 }}>VELLO</p>
-          <p style={{ color: "#404040", fontSize: 13, marginTop: 8 }}>Your personal life agent</p>
+          <p style={{ color: colors.white, fontWeight: typography.weight.extrabold, letterSpacing: "0.3em", fontSize: typography.size.lg, margin: 0 }}>VELLO</p>
+          <p style={{ color: colors.borderStrong, fontSize: typography.size.base, marginTop: 8 }}>Your personal life agent</p>
         </div>
 
-        <div style={{ background: "#0a0a0a", border: "1px solid #1c1c1c", borderRadius: 18, padding: 32 }}>
-          <div style={{ display: "flex", borderBottom: "1px solid #1c1c1c", marginBottom: 28 }}>
+        <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.xl, padding: 32 }}>
+          <div style={{ display: "flex", borderBottom: `1px solid ${colors.border}`, marginBottom: 28 }}>
             {(["login", "register"] as Mode[]).map((m) => (
               <button key={m} onClick={() => { setMode(m); setError(""); }}
                 style={{
                   background: "none", border: "none", cursor: "pointer",
-                  padding: "0 4px 14px", marginRight: 20, fontSize: 14, fontWeight: 600,
-                  color: mode === m ? "#fff" : "#404040",
-                  borderBottom: mode === m ? "2px solid #fff" : "2px solid transparent",
+                  padding: "0 4px 14px", marginRight: 20,
+                  fontSize: typography.size.md, fontWeight: typography.weight.semibold,
+                  color: mode === m ? colors.white : colors.borderStrong,
+                  borderBottom: mode === m ? `2px solid ${colors.white}` : "2px solid transparent",
                   transition: "all 0.15s",
                 }}>
                 {m === "login" ? "Sign in" : "Create account"}
@@ -72,37 +74,37 @@ export default function AuthPage({ mode: initial = "login" }: { mode?: Mode }) {
 
           <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 12, color: "#505050" }}>Email</label>
+              <label style={{ fontSize: typography.size.sm, color: colors.muted }}>Email</label>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 required autoFocus placeholder="you@example.com" style={INPUT}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "#ffffff")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "#1c1c1c")} />
+                onFocus={(e) => (e.currentTarget.style.borderColor = colors.white)}
+                onBlur={(e)  => (e.currentTarget.style.borderColor = colors.border)} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 12, color: "#505050" }}>Password</label>
+              <label style={{ fontSize: typography.size.sm, color: colors.muted }}>Password</label>
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                 required placeholder={mode === "register" ? "Minimum 8 characters" : ""} style={INPUT}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "#ffffff")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "#1c1c1c")} />
+                onFocus={(e) => (e.currentTarget.style.borderColor = colors.white)}
+                onBlur={(e)  => (e.currentTarget.style.borderColor = colors.border)} />
             </div>
 
-            {error && <p style={{ color: "#ef4444", fontSize: 12, margin: 0 }}>{error}</p>}
+            {error && <p style={{ color: colors.error, fontSize: typography.size.sm, margin: 0 }}>{error}</p>}
 
             <button type="submit" disabled={loading} className="btn-primary"
-              style={{ width: "100%", marginTop: 4, fontSize: 14, padding: 13 }}>
+              style={{ width: "100%", marginTop: 4, fontSize: typography.size.md, padding: 13 }}>
               {loading ? "…" : mode === "login" ? "Sign in" : "Create account →"}
             </button>
           </form>
 
           {mode === "register" && (
-            <p style={{ fontSize: 12, color: "#404040", textAlign: "center", marginTop: 20, lineHeight: 1.6 }}>
+            <p style={{ fontSize: typography.size.sm, color: colors.borderStrong, textAlign: "center", marginTop: 20, lineHeight: typography.lineHeight.normal }}>
               No credit card required. Your data stays yours.
             </p>
           )}
         </div>
 
         <div style={{ textAlign: "center", marginTop: 24 }}>
-          <Link to="/" style={{ fontSize: 12, color: "#2a2a2a", textDecoration: "none" }}>← Back</Link>
+          <Link to="/" style={{ fontSize: typography.size.sm, color: colors.faint, textDecoration: "none" }}>← Back</Link>
         </div>
       </div>
     </div>

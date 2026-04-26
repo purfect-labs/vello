@@ -101,3 +101,10 @@ export interface TemporalDeviation {
   late_by_minutes: number;
   message: string;
 }
+
+export interface BehavioralGap {
+  type: string;
+  domain: string;
+  description: string;
+  pattern_key?: string;
+}

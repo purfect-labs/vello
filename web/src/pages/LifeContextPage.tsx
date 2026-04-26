@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Nav from "../components/Nav";
 import { api } from "../api";
+import { colors, typography, radius } from "../design-system";
 
 const SOURCE_LABEL: Record<string, string> = {
   manual:       "You",
@@ -50,54 +51,52 @@ function ContextCard({ domainKey, domain }: {
 
   return (
     <div style={{
-      background: "#0a0a0a", border: "1px solid #1c1c1c",
-      borderRadius: 14, overflow: "hidden", transition: "border-color 0.15s",
+      background: colors.surface, border: `1px solid ${colors.border}`,
+      borderRadius: radius.lg, overflow: "hidden", transition: "border-color 0.15s",
     }}>
       {/* Card header */}
       <button
         onClick={() => setOpen((o) => !o)}
         style={{
           width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "18px 22px", background: "none", border: "none", cursor: "pointer",
-          textAlign: "left",
+          padding: "18px 22px", background: "none", border: "none", cursor: "pointer", textAlign: "left",
         }}
       >
         <div>
-          <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#f5f5f5" }}>
+          <p style={{ margin: "0 0 3px", fontSize: typography.size.md, fontWeight: typography.weight.semibold, color: colors.primary }}>
             {domain.label}
           </p>
-          <p style={{ margin: 0, fontSize: 12, color: "#505050", lineHeight: 1.4 }}>
+          <p style={{ margin: 0, fontSize: typography.size.sm, color: colors.muted, lineHeight: typography.lineHeight.tight }}>
             {domain.description}
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
           {filledCount > 0 && (
             <span style={{
-              fontSize: 11, fontWeight: 600, color: "#888",
-              background: "rgba(255,255,255,0.06)", padding: "2px 8px", borderRadius: 100,
+              fontSize: typography.size.xs, fontWeight: typography.weight.semibold, color: "#888",
+              background: "rgba(255,255,255,0.06)", padding: "2px 8px", borderRadius: radius.full,
             }}>
               {filledCount} / {domain.keys.length}
             </span>
           )}
-          <span style={{ color: "#404040", fontSize: 16, transition: "transform 0.2s", transform: open ? "rotate(90deg)" : "none" }}>›</span>
+          <span style={{ color: colors.borderStrong, fontSize: 16, transition: "transform 0.2s", transform: open ? "rotate(90deg)" : "none" }}>›</span>
         </div>
       </button>
 
       {/* Expanded fields */}
       {open && (
-        <div style={{ borderTop: "1px solid #1c1c1c" }}>
+        <div style={{ borderTop: `1px solid ${colors.border}` }}>
           {domain.keys.map((key) => {
-            const entry = data[key];
+            const entry     = data[key];
             const isEditing = editKey === key;
 
             return (
               <div key={key} style={{
-                padding: "14px 22px",
-                borderBottom: "1px solid #111",
+                padding: "14px 22px", borderBottom: `1px solid ${colors.borderSubtle}`,
                 display: "flex", alignItems: "center", gap: 12,
               }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "#505050" }}>
+                  <p style={{ margin: "0 0 3px", fontSize: typography.size.sm, color: colors.muted }}>
                     {KEY_LABELS[key] ?? key}
                   </p>
                   {isEditing ? (
@@ -108,8 +107,9 @@ function ContextCard({ domainKey, domain }: {
                         onChange={(e) => setEditValue(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") saveEdit(key); if (e.key === "Escape") setEditKey(null); }}
                         style={{
-                          flex: 1, background: "#111", border: "1px solid #333",
-                          borderRadius: 8, padding: "6px 10px", fontSize: 13, color: "#f5f5f5", outline: "none",
+                          flex: 1, background: colors.elevated, border: `1px solid ${colors.borderStrong}`,
+                          borderRadius: radius.sm, padding: "6px 10px", fontSize: typography.size.base,
+                          color: colors.primary, outline: "none",
                         }}
                       />
                       <button onClick={() => saveEdit(key)} disabled={saving} className="btn-primary" style={{ fontSize: 12, padding: "5px 12px" }}>
@@ -120,14 +120,14 @@ function ContextCard({ domainKey, domain }: {
                       </button>
                     </div>
                   ) : entry ? (
-                    <p style={{ margin: 0, fontSize: 14, color: "#f5f5f5" }}>
+                    <p style={{ margin: 0, fontSize: typography.size.md, color: colors.primary }}>
                       {entry.value}
-                      <span style={{ marginLeft: 8, fontSize: 10, color: "#3a3a3a", fontWeight: 600 }}>
+                      <span style={{ marginLeft: 8, fontSize: typography.size.xs, color: colors.faint, fontWeight: typography.weight.semibold }}>
                         {SOURCE_LABEL[entry.source] ?? entry.source}
                       </span>
                     </p>
                   ) : (
-                    <p style={{ margin: 0, fontSize: 13, color: "#2a2a2a", fontStyle: "italic" }}>Not set</p>
+                    <p style={{ margin: 0, fontSize: typography.size.base, color: colors.faint, fontStyle: "italic" }}>Not set</p>
                   )}
                 </div>
 
@@ -135,18 +135,18 @@ function ContextCard({ domainKey, domain }: {
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                     <button
                       onClick={() => { setEditKey(key); setEditValue(entry?.value ?? ""); }}
-                      style={{ fontSize: 11, color: "#404040", background: "none", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: 6, transition: "color 0.15s" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = "#f5f5f5")}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = "#404040")}
+                      style={{ fontSize: 11, color: colors.borderStrong, background: "none", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: 6, transition: "color 0.15s" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = colors.primary)}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = colors.borderStrong)}
                     >
                       {entry ? "Edit" : "Add"}
                     </button>
                     {entry && (
                       <button
                         onClick={() => deleteEntry(key)}
-                        style={{ fontSize: 11, color: "#2a2a2a", background: "none", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: 6, transition: "color 0.15s" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = "#ef4444")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = "#2a2a2a")}
+                        style={{ fontSize: 11, color: colors.faint, background: "none", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: 6, transition: "color 0.15s" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = colors.error)}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = colors.faint)}
                       >
                         ×
                       </button>
@@ -174,29 +174,29 @@ export default function LifeContextPage() {
   const totalKeys   = Object.values(context).reduce((sum, d) => sum + d.keys.length, 0);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", flexDirection: "column" }}>
       <Nav />
 
       <div style={{ maxWidth: 720, margin: "0 auto", width: "100%", padding: "48px 24px" }}>
 
         <div style={{ marginBottom: 40 }}>
-          <p style={{ margin: "0 0 6px", fontSize: 11, color: "#505050", fontWeight: 700, letterSpacing: "0.12em" }}>LIFE CONTEXT</p>
-          <h1 style={{ margin: "0 0 12px", fontSize: 26, fontWeight: 800, color: "#fff", letterSpacing: "-0.03em" }}>
+          <p style={{ margin: "0 0 6px", fontSize: typography.size.xs, color: colors.muted, fontWeight: typography.weight.bold, letterSpacing: "0.12em" }}>LIFE CONTEXT</p>
+          <h1 style={{ margin: "0 0 12px", fontSize: typography.size["2xl"], fontWeight: typography.weight.extrabold, color: colors.white, letterSpacing: "-0.03em" }}>
             What Vello knows about you
           </h1>
-          <p style={{ margin: "0 0 20px", fontSize: 14, color: "#505050", lineHeight: 1.6, maxWidth: 560 }}>
+          <p style={{ margin: "0 0 20px", fontSize: typography.size.md, color: colors.muted, lineHeight: typography.lineHeight.normal, maxWidth: 560 }}>
             These are the facts Vello has collected — through conversation, observation, or what you've entered here.
             Every field is editable and deletable. Nothing is required.
           </p>
           {!loading && totalFilled > 0 && (
-            <p style={{ margin: 0, fontSize: 12, color: "#3a3a3a" }}>
+            <p style={{ margin: 0, fontSize: typography.size.sm, color: colors.borderStrong }}>
               {totalFilled} of {totalKeys} fields filled — Vello will learn the rest over time.
             </p>
           )}
         </div>
 
         {loading ? (
-          <p style={{ color: "#333", fontSize: 13 }}>Loading…</p>
+          <p style={{ color: colors.borderStrong, fontSize: typography.size.base }}>Loading…</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {Object.entries(context).map(([key, domain]) => (
