@@ -268,3 +268,18 @@ def detect_deviations(user_id: str, threshold_std: float = 1.5) -> list[dict]:
             })
 
     return deviations
+
+
+def refresh_all_patterns() -> None:
+    """Recompute pattern stats for every user that has observations."""
+    from vello.database import get_connection
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT DISTINCT user_id, pattern_key, label FROM temporal_patterns"
+    ).fetchall()
+    conn.close()
+    for row in rows:
+        try:
+            update_pattern_stats(row["user_id"], row["pattern_key"], row["label"])
+        except Exception:
+            pass

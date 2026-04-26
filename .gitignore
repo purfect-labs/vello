@@ -26,3 +26,8 @@ android/local.properties
 # Misc
 .DS_Store
 *.log
+
+# terraform
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup

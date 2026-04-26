@@ -97,4 +97,16 @@ export const api = {
     list: () => request<Array<{ type: string; domain: string; description: string; pattern_key?: string }>>("/gaps/"),
     context: () => request<{ context: string }>("/gaps/context"),
   },
+
+  briefing: {
+    getPreferences: () => request<{ enabled: boolean; hour: number }>("/briefing/preferences"),
+    updatePreferences: (body: { enabled?: boolean; hour?: number }) =>
+      request("/briefing/preferences", { method: "PATCH", body: JSON.stringify(body) }),
+    sendTest: () => request("/briefing/send-test", { method: "POST" }),
+  },
+
+  webhook: {
+    getToken: () => request<{ token: string | null }>("/webhook/token"),
+    regenerateToken: () => request<{ token: string }>("/webhook/token/regenerate", { method: "POST" }),
+  },
 };

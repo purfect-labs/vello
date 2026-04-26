@@ -201,6 +201,27 @@ def init_db() -> None:
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
         """)
+        # Waitlist
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS waitlist (
+                id         TEXT PRIMARY KEY,
+                email      TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+
+    # ── Schema migrations (safe on existing DBs) ───────────────────────────
+    for sql in [
+        "ALTER TABLE users ADD COLUMN briefing_enabled INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE users ADD COLUMN briefing_hour    INTEGER NOT NULL DEFAULT 7",
+        "ALTER TABLE users ADD COLUMN webhook_token    TEXT",
+    ]:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            pass
+
     conn.close()
 
 

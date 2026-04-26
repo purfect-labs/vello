@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Nav from "../components/Nav";
 import { api } from "../api";
 import { useAuth } from "../App";
@@ -62,6 +62,12 @@ function GhostBtn({ children, onClick, disabled }: {
   );
 }
 
+const HOURS = Array.from({ length: 24 }, (_, i) => {
+  const h = i % 12 || 12;
+  const ampm = i < 12 ? "am" : "pm";
+  return { value: i, label: `${h}:00 ${ampm} UTC` };
+});
+
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
 
@@ -73,6 +79,29 @@ export default function SettingsPage() {
   const [importResult, setImportResult]   = useState<{ imported: number; email: string } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [tokenFocus, setTokenFocus]       = useState(false);
+
+  // Briefing prefs
+  const [briefingEnabled, setBriefingEnabled] = useState(true);
+  const [briefingHour, setBriefingHour]       = useState(7);
+  const [briefingSaving, setBriefingSaving]   = useState(false);
+  const [briefingOk, setBriefingOk]           = useState(false);
+  const [sendingTest, setSendingTest]         = useState(false);
+  const [testOk, setTestOk]                   = useState(false);
+
+  // Webhook
+  const [webhookToken, setWebhookToken]       = useState<string | null>(null);
+  const [tokenVisible, setTokenVisible]       = useState(false);
+  const [regenning, setRegenning]             = useState(false);
+
+  useEffect(() => {
+    api.briefing.getPreferences().then((p: { enabled: boolean; hour: number }) => {
+      setBriefingEnabled(p.enabled);
+      setBriefingHour(p.hour);
+    }).catch(() => {});
+    api.webhook.getToken().then((r: { token: string | null }) => {
+      setWebhookToken(r.token);
+    }).catch(() => {});
+  }, []);
 
   async function connectKortex() {
     if (!kortexToken.trim()) return;
@@ -110,6 +139,39 @@ export default function SettingsPage() {
     await api.kortex.disconnect().catch(() => {});
     await refreshUser();
     setDisconnecting(false); setConnectOk(false); setImportResult(null);
+  }
+
+  async function saveBriefingPrefs() {
+    setBriefingSaving(true); setBriefingOk(false);
+    try {
+      await api.briefing.updatePreferences({ enabled: briefingEnabled, hour: briefingHour });
+      setBriefingOk(true);
+      setTimeout(() => setBriefingOk(false), 2500);
+    } finally {
+      setBriefingSaving(false);
+    }
+  }
+
+  async function sendTestBriefing() {
+    setSendingTest(true); setTestOk(false);
+    try {
+      await api.briefing.sendTest();
+      setTestOk(true);
+      setTimeout(() => setTestOk(false), 3000);
+    } finally {
+      setSendingTest(false);
+    }
+  }
+
+  async function regenWebhookToken() {
+    setRegenning(true);
+    try {
+      const r = await api.webhook.regenerateToken() as { token: string };
+      setWebhookToken(r.token);
+      setTokenVisible(true);
+    } finally {
+      setRegenning(false);
+    }
   }
 
   return (
@@ -183,6 +245,117 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+        </SettingCard>
+
+        {/* Daily briefing */}
+        <SettingCard
+          title="daily briefing"
+          description="vello emails you a digest each morning — signals, patterns, gaps, and anything worth acting on today."
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Toggle */}
+            <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+              <div
+                onClick={() => setBriefingEnabled(v => !v)}
+                style={{
+                  width: 40, height: 22, borderRadius: 999,
+                  background: briefingEnabled ? V.amber : V.surfaceHi,
+                  border: `1px solid ${briefingEnabled ? V.amber : V.border}`,
+                  position: "relative", cursor: "pointer", transition: "background .2s",
+                }}
+              >
+                <div style={{
+                  position: "absolute", top: 3, left: briefingEnabled ? 20 : 3,
+                  width: 14, height: 14, borderRadius: "50%", background: briefingEnabled ? "#000" : V.inkFaint,
+                  transition: "left .2s",
+                }} />
+              </div>
+              <Mono size={13} color={briefingEnabled ? V.ink : V.inkDim}>
+                {briefingEnabled ? "enabled" : "disabled"}
+              </Mono>
+            </label>
+
+            {/* Hour selector */}
+            {briefingEnabled && (
+              <div>
+                <Mono size={10} color={V.inkFaint} style={{ display: "block", marginBottom: 8, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+                  delivery time
+                </Mono>
+                <select
+                  value={briefingHour}
+                  onChange={e => setBriefingHour(Number(e.target.value))}
+                  style={{
+                    background: V.surfaceHi, border: `1px solid ${V.border}`,
+                    borderRadius: 8, padding: "8px 12px", fontSize: 13,
+                    color: V.ink, fontFamily: V.mono, outline: "none", cursor: "pointer",
+                  }}
+                >
+                  {HOURS.map(h => (
+                    <option key={h.value} value={h.value}>{h.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <PrimaryBtn onClick={saveBriefingPrefs} disabled={briefingSaving}>
+                {briefingSaving ? "saving…" : "save"}
+              </PrimaryBtn>
+              <GhostBtn onClick={sendTestBriefing} disabled={sendingTest}>
+                {sendingTest ? "sending…" : "send test email"}
+              </GhostBtn>
+              {briefingOk && <Mono size={12} color={V.good}>saved.</Mono>}
+              {testOk     && <Mono size={12} color={V.good}>check your inbox.</Mono>}
+            </div>
+          </div>
+        </SettingCard>
+
+        {/* Webhook */}
+        <SettingCard
+          title="webhook ingest"
+          description="wire zapier, make, or n8n to send text here — vello will run signal detection on anything you send. copy logs, slack messages, notes, anything."
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div>
+              <Mono size={10} color={V.inkFaint} style={{ display: "block", marginBottom: 8, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+                endpoint
+              </Mono>
+              <Mono size={12} color={V.inkDim}>
+                POST https://vello.flexflows.net/api/v1/webhook/ingest
+              </Mono>
+              <Mono size={10} color={V.inkFaint} style={{ display: "block", marginTop: 4 }}>
+                header: <code style={{ color: V.inkDim }}>x-webhook-token: &lt;your token&gt;</code>
+              </Mono>
+              <Mono size={10} color={V.inkFaint} style={{ display: "block", marginTop: 2 }}>
+                body: <code style={{ color: V.inkDim }}>{`{"text": "..."}`}</code>
+              </Mono>
+            </div>
+            <div>
+              <Mono size={10} color={V.inkFaint} style={{ display: "block", marginBottom: 8, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+                token
+              </Mono>
+              {webhookToken ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <Mono size={12} color={V.ink} style={{ fontFamily: V.mono }}>
+                    {tokenVisible ? webhookToken : webhookToken.slice(0, 8) + "••••••••••••••••••••"}
+                  </Mono>
+                  <button
+                    onClick={() => setTokenVisible(v => !v)}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontFamily: V.mono, fontSize: 11, color: V.inkDim }}
+                  >
+                    {tokenVisible ? "hide" : "show"}
+                  </button>
+                </div>
+              ) : (
+                <Mono size={12} color={V.inkFaint}>no token yet — generate one below.</Mono>
+              )}
+            </div>
+            <div>
+              <GhostBtn onClick={regenWebhookToken} disabled={regenning}>
+                {regenning ? "…" : webhookToken ? "regenerate token" : "generate token"}
+              </GhostBtn>
+            </div>
+          </div>
         </SettingCard>
 
         {/* Account */}

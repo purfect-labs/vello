@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from vello.database import init_db
+from vello.scheduler import start_scheduler, stop_scheduler
 from vello.api.routes.auth import router as auth_router
 from vello.api.routes.dialogue import router as dialogue_router
 from vello.api.routes.life_context import router as context_router
@@ -16,12 +17,17 @@ from vello.api.routes.kortex_sync import router as kortex_router
 from vello.api.routes.signals import router as signals_router
 from vello.api.routes.temporal import router as temporal_router
 from vello.api.routes.gaps import router as gaps_router
+from vello.api.routes.briefing import router as briefing_router
+from vello.api.routes.webhook import router as webhook_router
+from vello.api.routes.waitlist import router as waitlist_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    start_scheduler()
     yield
+    stop_scheduler()
 
 
 def create_app() -> FastAPI:
@@ -58,6 +64,9 @@ def create_app() -> FastAPI:
     app.include_router(signals_router,     prefix="/api/v1/signals",    tags=["signals"])
     app.include_router(temporal_router,    prefix="/api/v1/temporal",   tags=["temporal"])
     app.include_router(gaps_router,        prefix="/api/v1/gaps",       tags=["gaps"])
+    app.include_router(briefing_router,    prefix="/api/v1/briefing",   tags=["briefing"])
+    app.include_router(webhook_router,     prefix="/api/v1/webhook",    tags=["webhook"])
+    app.include_router(waitlist_router,    prefix="/api/v1",            tags=["waitlist"])
 
     @app.get("/health", include_in_schema=False)
     async def health():
