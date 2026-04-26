@@ -68,6 +68,47 @@ body {
 }
 .btn-ghost:disabled { opacity: 0.3; cursor: default; }
 
+/* ── Vello landing animations ── */
+@keyframes velloBloom {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(1); }
+  50%      { opacity: 0.85; transform: translate(-50%, -50%) scale(1.08); }
+}
+@keyframes velloPulse {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
+}
+@keyframes velloDrift {
+  0%   { transform: translateX(-50%) translateY(0); }
+  100% { transform: translateX(-50%) translateY(-12px); }
+}
+@keyframes velloScan {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@keyframes velloTypeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes velloDot {
+  0%, 100% { transform: scale(1);    opacity: 0.7; }
+  50%      { transform: scale(1.35); opacity: 1;   }
+}
+@keyframes velloOrbit {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes velloFlicker {
+  0%, 92%, 100% { opacity: 1; }
+  94%           { opacity: 0.4; }
+  96%           { opacity: 1; }
+}
+@keyframes velloPacket {
+  0%   { left: 20%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { left: 70%; opacity: 0; }
+}
+
 /* ── Card / panel ── */
 .panel {
   background: #0a0a0a;

@@ -8,6 +8,7 @@ import DialoguePage from "./pages/DialoguePage";
 import LifeContextPage from "./pages/LifeContextPage";
 import RoutinesPage from "./pages/RoutinesPage";
 import SettingsPage from "./pages/SettingsPage";
+import LandingPage from "./pages/LandingPage";
 
 interface AuthCtx {
   user: User | null;
@@ -61,19 +62,31 @@ function Protected({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RootRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return (
+    <div style={{ minHeight: "100vh", background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <span style={{ color: "#333", fontSize: 12, letterSpacing: "0.2em" }}>VELLO</span>
+    </div>
+  );
+  if (user) return <Navigate to="/dashboard" replace />;
+  return <LandingPage />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/login"    element={<AuthPage mode="login" />} />
-          <Route path="/register" element={<AuthPage mode="register" />} />
-          <Route path="/" element={<Protected><DashboardPage /></Protected>} />
-          <Route path="/dialogue" element={<Protected><DialoguePage /></Protected>} />
-          <Route path="/profile"  element={<Protected><LifeContextPage /></Protected>} />
-          <Route path="/routines" element={<Protected><RoutinesPage /></Protected>} />
-          <Route path="/settings" element={<Protected><SettingsPage /></Protected>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/"          element={<RootRoute />} />
+          <Route path="/login"     element={<AuthPage mode="login" />} />
+          <Route path="/register"  element={<AuthPage mode="register" />} />
+          <Route path="/dashboard" element={<Protected><DashboardPage /></Protected>} />
+          <Route path="/dialogue"  element={<Protected><DialoguePage /></Protected>} />
+          <Route path="/profile"   element={<Protected><LifeContextPage /></Protected>} />
+          <Route path="/routines"  element={<Protected><RoutinesPage /></Protected>} />
+          <Route path="/settings"  element={<Protected><SettingsPage /></Protected>} />
+          <Route path="*"          element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

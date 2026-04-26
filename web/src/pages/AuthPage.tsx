@@ -38,7 +38,7 @@ export default function AuthPage({ mode: initial = "login" }: { mode?: Mode }) {
         await api.auth.register(email, password);
       }
       await refreshUser();
-      navigate("/");
+      navigate("/dashboard");
     } catch (err: unknown) {
       const detail = (err as { detail?: string }).detail ?? "request_failed";
       setError(ERROR_MAP[detail] ?? "Something went wrong. Please try again.");
