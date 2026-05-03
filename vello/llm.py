@@ -10,14 +10,12 @@ Together AI / Fireworks / Ollama, local vLLM, etc.
   LLM_BASE_URL=https://api.together.xyz/v1
   LLM_API_KEY=<together-key>
   DIALOGUE_MODEL=NousResearch/Hermes-3-Llama-3.1-8B
-  AGENT_MODEL=NousResearch/Hermes-3-Llama-3.1-70B
 
   # Hermes via Ollama (local)
   LLM_PROVIDER=openai
   LLM_BASE_URL=http://localhost:11434/v1
   LLM_API_KEY=ollama
   DIALOGUE_MODEL=hermes3
-  AGENT_MODEL=hermes3:70b
 """
 from vello.config import LLM_PROVIDER, LLM_BASE_URL, LLM_API_KEY, ANTHROPIC_API_KEY
 

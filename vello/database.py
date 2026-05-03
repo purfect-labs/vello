@@ -210,19 +210,87 @@ def init_db() -> None:
             )
         """)
 
-    # ── Schema migrations (safe on existing DBs) ───────────────────────────
-    for sql in [
-        "ALTER TABLE users ADD COLUMN briefing_enabled INTEGER NOT NULL DEFAULT 1",
-        "ALTER TABLE users ADD COLUMN briefing_hour    INTEGER NOT NULL DEFAULT 7",
-        "ALTER TABLE users ADD COLUMN webhook_token    TEXT",
-    ]:
-        try:
-            conn.execute(sql)
-            conn.commit()
-        except Exception:
-            pass
+        # Scheduler advisory locks — used for leader election across workers.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS scheduler_locks (
+                job_id      TEXT NOT NULL,
+                period_key  TEXT NOT NULL,
+                holder      TEXT NOT NULL,
+                acquired_at TEXT NOT NULL,
+                PRIMARY KEY (job_id, period_key)
+            )
+        """)
 
+        # Persistent rate-limit attempts (replaces in-memory dict that didn't
+        # survive restarts and didn't share across workers).
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rate_limit_attempts (
+                id         TEXT PRIMARY KEY,
+                bucket     TEXT NOT NULL,
+                key        TEXT NOT NULL,
+                attempt_at TEXT NOT NULL
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_rate_limit_lookup "
+            "ON rate_limit_attempts(bucket, key, attempt_at)"
+        )
+
+        # Schema versioning so migrations are observable rather than silently
+        # ignored on AlreadyExists errors.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS schema_versions (
+                version    INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL
+            )
+        """)
+
+    _apply_schema_migrations(conn)
     conn.close()
+
+
+def _apply_schema_migrations(conn: sqlite3.Connection) -> None:
+    """Apply pending schema migrations. Failures here are surfaced — silent
+    swallowing is what hid bugs in the previous implementation."""
+    import logging
+    log = logging.getLogger(__name__)
+
+    applied = {r[0] for r in conn.execute("SELECT version FROM schema_versions").fetchall()}
+
+    def _stamp(version: int) -> None:
+        conn.execute(
+            "INSERT INTO schema_versions (version, applied_at) VALUES (?, ?)",
+            (version, now()),
+        )
+        conn.commit()
+
+    def _add_column_if_missing(table: str, column: str, definition: str) -> None:
+        cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        if column in cols:
+            return
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        conn.commit()
+
+    # v1: briefing prefs + webhook token
+    if 1 not in applied:
+        try:
+            _add_column_if_missing("users", "briefing_enabled", "INTEGER NOT NULL DEFAULT 1")
+            _add_column_if_missing("users", "briefing_hour",    "INTEGER NOT NULL DEFAULT 7")
+            _add_column_if_missing("users", "webhook_token",    "TEXT")
+            _stamp(1)
+        except Exception as exc:
+            log.error("schema migration v1 failed: %s", exc)
+            raise
+
+    # v2: timezone field on users (used by temporal pattern engine to convert
+    # observations into the user's local time-of-day)
+    if 2 not in applied:
+        try:
+            _add_column_if_missing("users", "timezone", "TEXT NOT NULL DEFAULT 'UTC'")
+            _stamp(2)
+        except Exception as exc:
+            log.error("schema migration v2 failed: %s", exc)
+            raise
 
 
 # ── Users ──────────────────────────────────────────────────────────────────────
@@ -256,15 +324,65 @@ def get_user_by_id(uid: str) -> Optional[sqlite3.Row]:
     return row
 
 
+# ── Rate limiting ──────────────────────────────────────────────────────────────
+
+def record_rate_limit_attempt(bucket: str, key: str) -> None:
+    """Persist one attempt for a (bucket, key) pair — survives restarts and shared across workers."""
+    conn = get_connection()
+    with conn:
+        conn.execute(
+            "INSERT INTO rate_limit_attempts (id, bucket, key, attempt_at) VALUES (?, ?, ?, ?)",
+            (str(uuid.uuid4()), bucket, key, now()),
+        )
+    conn.close()
+
+
+def count_recent_rate_limit_attempts(bucket: str, key: str, window_seconds: int) -> int:
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=window_seconds)).isoformat()
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT COUNT(*) FROM rate_limit_attempts WHERE bucket=? AND key=? AND attempt_at > ?",
+        (bucket, key, cutoff),
+    ).fetchone()
+    conn.close()
+    return row[0] if row else 0
+
+
+def prune_old_rate_limit_attempts(window_seconds: int = 86400) -> int:
+    """Drop attempts older than window_seconds. Run periodically to keep table small."""
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=window_seconds)).isoformat()
+    conn = get_connection()
+    with conn:
+        cur = conn.execute("DELETE FROM rate_limit_attempts WHERE attempt_at < ?", (cutoff,))
+    conn.close()
+    return cur.rowcount
+
+
 def verify_password(user: sqlite3.Row, password: str) -> bool:
     return bcrypt.checkpw(password.encode(), user["password_hash"].encode())
 
 
 def set_kortex_token(user_id: str, token: str) -> None:
+    """Persist a user's Kortex personal token, encrypted at rest."""
+    from vello.crypto import encrypt
+    enc = encrypt(token) if token else ""
     conn = get_connection()
     with conn:
-        conn.execute("UPDATE users SET kortex_token=? WHERE id=?", (token, user_id))
+        conn.execute("UPDATE users SET kortex_token=? WHERE id=?", (enc, user_id))
     conn.close()
+
+
+def get_kortex_token(user_id: str) -> str:
+    """Decrypt and return the user's Kortex token, or '' if not connected."""
+    from vello.crypto import decrypt
+    conn = get_connection()
+    row = conn.execute("SELECT kortex_token FROM users WHERE id=?", (user_id,)).fetchone()
+    conn.close()
+    if not row or not row["kortex_token"]:
+        return ""
+    return decrypt(row["kortex_token"])
 
 
 def mark_onboarding_complete(user_id: str) -> None:
@@ -445,6 +563,42 @@ def create_zone(user_id: str, label: str, ztype: str, address: Optional[str],
 def get_zones(user_id: str) -> list[sqlite3.Row]:
     conn = get_connection()
     rows = conn.execute("SELECT * FROM zones WHERE user_id=? ORDER BY type, label", (user_id,)).fetchall()
+    conn.close()
+    return rows
+
+
+def get_zone(user_id: str, zone_id: str) -> Optional[sqlite3.Row]:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM zones WHERE id=? AND user_id=?",
+        (zone_id, user_id),
+    ).fetchone()
+    conn.close()
+    return row
+
+
+# ── Location events ────────────────────────────────────────────────────────────
+
+def record_location_event(user_id: str, zone_id: str, event_type: str,
+                           occurred_at: Optional[str] = None) -> str:
+    eid = str(uuid.uuid4())
+    when = occurred_at or now()
+    conn = get_connection()
+    with conn:
+        conn.execute(
+            "INSERT INTO location_events (id, user_id, zone_id, event_type, occurred_at) VALUES (?,?,?,?,?)",
+            (eid, user_id, zone_id, event_type, when),
+        )
+    conn.close()
+    return eid
+
+
+def get_recent_location_events(user_id: str, limit: int = 50) -> list[sqlite3.Row]:
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM location_events WHERE user_id=? ORDER BY occurred_at DESC LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
     conn.close()
     return rows
 

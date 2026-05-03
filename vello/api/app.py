@@ -3,8 +3,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from vello.database import init_db
+from vello.logging_config import (
+    BodySizeLimitMiddleware,
+    RequestLoggingMiddleware,
+    setup_logging,
+)
 from vello.scheduler import start_scheduler, stop_scheduler
 from vello.api.routes.auth import router as auth_router
 from vello.api.routes.dialogue import router as dialogue_router
@@ -24,6 +30,9 @@ from vello.api.routes.waitlist import router as waitlist_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from vello.config import validate_config
+    setup_logging()
+    validate_config()
     init_db()
     start_scheduler()
     yield
@@ -45,6 +54,8 @@ def create_app() -> FastAPI:
         for o in os.environ.get("CORS_ORIGIN", "http://localhost:5174").split(",")
         if o.strip()
     ]
+    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(BodySizeLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
@@ -70,6 +81,13 @@ def create_app() -> FastAPI:
 
     @app.get("/health", include_in_schema=False)
     async def health():
-        return {"status": "ok"}
+        from vello.database import get_connection
+        try:
+            conn = get_connection()
+            conn.execute("SELECT 1").fetchone()
+            conn.close()
+            return {"status": "ok"}
+        except Exception as exc:
+            return JSONResponse({"status": "error", "detail": str(exc)}, status_code=503)
 
     return app

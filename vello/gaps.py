@@ -69,7 +69,7 @@ def detect_gaps(user_id: str) -> list[dict]:
                          for v in schedule_ctx.values())
     if routine_stated:
         high_variance = [pk for pk, p in patterns.items()
-                         if p.get("std_minutes", 0) and float(p["std_minutes"]) > 60]
+                         if p.get("std_dev_minutes", 0) and float(p["std_dev_minutes"]) > 60]
         for pk in high_variance:
             gaps.append({
                 "type":        "routine_variance",
