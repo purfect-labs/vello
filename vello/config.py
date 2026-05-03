@@ -3,10 +3,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ANTHROPIC_API_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "")
+ENV: str                = os.environ.get("ENV", "development")
+ANTHROPIC_API_KEY: str  = os.environ.get("ANTHROPIC_API_KEY", "")
 DB_PATH: str            = os.environ.get("DB_PATH", "vello.db")
 SECRET_KEY: str         = os.environ.get("SECRET_KEY", "change-me-in-production")
 KORTEX_API_URL: str     = os.environ.get("KORTEX_API_URL", "https://kortex.flexflows.net/api/v1")
+KORTEX_PUBLIC_KEY_URL: str = os.environ.get(
+    "KORTEX_PUBLIC_KEY_URL",
+    f"{KORTEX_API_URL}/developer/public-key",
+)
 RESEND_API_KEY: str     = os.environ.get("RESEND_API_KEY", "")
 BRIEFING_FROM: str      = os.environ.get("BRIEFING_FROM", "Vello <briefing@vello.flexflows.net>")
 APP_URL: str            = os.environ.get("APP_URL", "https://vello.flexflows.net")
@@ -22,4 +27,24 @@ AGENT_MODEL: str    = os.environ.get("AGENT_MODEL",    "claude-sonnet-4-6")
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30 days
 
+# Request hardening
+MAX_REQUEST_BODY_BYTES: int = int(os.environ.get("MAX_REQUEST_BODY_BYTES", str(1 * 1024 * 1024)))  # 1 MiB
+MAX_DIALOGUE_MESSAGE_CHARS: int = int(os.environ.get("MAX_DIALOGUE_MESSAGE_CHARS", "4000"))
+
 ONBOARDING_SEQUENCE = ["schedule", "work", "fitness"]
+
+
+def validate_config() -> None:
+    """Fail fast at startup if security-critical variables are missing or weak."""
+    errors: list[str] = []
+
+    if SECRET_KEY in ("", "change-me-in-production", "insecure-dev-key-change-in-production"):
+        if ENV == "production":
+            errors.append("SECRET_KEY must be overridden in production (never the default)")
+    if len(SECRET_KEY) < 32 and ENV == "production":
+        errors.append("SECRET_KEY too short (minimum 32 characters in production)")
+
+    if errors:
+        raise RuntimeError(
+            "Vello configuration errors — fix before starting:\n  " + "\n  ".join(errors)
+        )

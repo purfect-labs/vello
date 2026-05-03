@@ -188,15 +188,26 @@ def send_briefing(user_id: str, email: str) -> bool:
 
 
 def send_all_briefings() -> None:
+    """Send a briefing to each user whose local-time briefing_hour is the current hour."""
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        ZoneInfo = None  # type: ignore
+
     conn = get_connection()
     rows = conn.execute(
-        "SELECT id, email, briefing_hour FROM users WHERE briefing_enabled=1"
+        "SELECT id, email, briefing_hour, timezone FROM users WHERE briefing_enabled=1"
     ).fetchall()
     conn.close()
 
-    current_hour = datetime.now(timezone.utc).hour
+    now_utc = datetime.now(timezone.utc)
     for row in rows:
-        if row["briefing_hour"] == current_hour:
+        tz_name = (row["timezone"] if "timezone" in row.keys() else None) or "UTC"
+        try:
+            local_hour = now_utc.astimezone(ZoneInfo(tz_name)).hour if ZoneInfo else now_utc.hour
+        except Exception:
+            local_hour = now_utc.hour
+        if row["briefing_hour"] == local_hour:
             try:
                 send_briefing(row["id"], row["email"])
             except Exception as exc:
