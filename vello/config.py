@@ -21,9 +21,12 @@ LLM_PROVIDER: str  = os.environ.get("LLM_PROVIDER", "anthropic")
 LLM_BASE_URL: str  = os.environ.get("LLM_BASE_URL", "")   # e.g. https://api.together.xyz/v1
 LLM_API_KEY: str   = os.environ.get("LLM_API_KEY", "")    # provider key; falls back to ANTHROPIC_API_KEY
 
-# Model names — override per-provider via env
+# Model name — override per-provider via env. Dialogue is currently the only
+# active LLM call site. An AGENT_MODEL config previously existed for an
+# unbuilt Sonnet-driven inference pass; removed in the audit pass to avoid
+# implying a feature that doesn't exist. Re-add it here once an inference
+# engine actually exists and uses it.
 DIALOGUE_MODEL: str = os.environ.get("DIALOGUE_MODEL", "claude-haiku-4-5-20251001")
-AGENT_MODEL: str    = os.environ.get("AGENT_MODEL",    "claude-sonnet-4-6")
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30 days
 
