@@ -10,14 +10,12 @@ Together AI / Fireworks / Ollama, local vLLM, etc.
   LLM_BASE_URL=https://api.together.xyz/v1
   LLM_API_KEY=<together-key>
   DIALOGUE_MODEL=NousResearch/Hermes-3-Llama-3.1-8B
-  AGENT_MODEL=NousResearch/Hermes-3-Llama-3.1-70B
 
   # Hermes via Ollama (local)
   LLM_PROVIDER=openai
   LLM_BASE_URL=http://localhost:11434/v1
   LLM_API_KEY=ollama
   DIALOGUE_MODEL=hermes3
-  AGENT_MODEL=hermes3:70b
 """
 from vello.config import LLM_PROVIDER, LLM_BASE_URL, LLM_API_KEY, ANTHROPIC_API_KEY
 
@@ -40,10 +38,14 @@ def complete(system: str, messages: list[dict], model: str, max_tokens: int = 60
 def _anthropic_complete(system: str, messages: list[dict], model: str, max_tokens: int) -> str:
     import anthropic
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    # Mark the system prompt as ephemerally-cacheable. After the first call
+    # the system block is read from Anthropic's cache for ~5 minutes, cutting
+    # input-token cost on follow-up dialogue turns by ~90% on cache hit.
+    # Falls back gracefully on tiny prompts that don't meet the cache minimum.
     r = client.messages.create(
         model=model,
         max_tokens=max_tokens,
-        system=system,
+        system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}] if system else [],
         messages=messages,
     )
     return r.content[0].text

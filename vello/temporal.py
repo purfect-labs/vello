@@ -10,13 +10,42 @@ import json
 from datetime import datetime, timezone
 from typing import Optional
 
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None  # type: ignore
+
 from vello.database import (
     log_temporal_observation,
     get_temporal_observations,
     upsert_temporal_pattern,
     get_temporal_patterns,
     get_temporal_pattern,
+    get_user_by_id,
 )
+
+
+# Plausible "first wake message" window, in local minutes-since-midnight.
+# 4:00am – 11:30am. Outside this window a "first message of the day" is more
+# likely a night-owl session than a wake event.
+WAKE_WINDOW: tuple[int, int] = (4 * 60, 11 * 60 + 30)
+
+
+def user_local_now(user_id: str) -> datetime:
+    """
+    Return the current time in the user's stored timezone (defaults to UTC
+    when zoneinfo isn't available, the user has no row, or the stored tz is
+    invalid). All temporal observations are recorded in local minutes so
+    "wake at 7am" means 7am in the user's life, not in UTC.
+    """
+    if ZoneInfo is None:
+        return datetime.now(timezone.utc)
+    user = get_user_by_id(user_id)
+    tz_name = (user["timezone"] if user and "timezone" in user.keys() else None) or "UTC"
+    try:
+        return datetime.now(ZoneInfo(tz_name))
+    except Exception:
+        return datetime.now(timezone.utc)
 
 
 def _mean_std(values: list[float]) -> tuple[float, float]:
@@ -30,13 +59,14 @@ def _mean_std(values: list[float]) -> tuple[float, float]:
     return mean, math.sqrt(variance)
 
 
-def _minutes_now() -> int:
-    t = datetime.now(timezone.utc)
+def _minutes_now(user_id: Optional[str] = None) -> int:
+    t = user_local_now(user_id) if user_id else datetime.now(timezone.utc)
     return t.hour * 60 + t.minute
 
 
-def _day_of_week_now() -> int:
-    return datetime.now(timezone.utc).weekday()  # 0=Mon
+def _day_of_week_now(user_id: Optional[str] = None) -> int:
+    t = user_local_now(user_id) if user_id else datetime.now(timezone.utc)
+    return t.weekday()  # 0=Mon
 
 
 def minutes_to_hhmm(minutes: int) -> str:
@@ -177,8 +207,8 @@ def log_observation(user_id: str, pattern_key: str,
                     label: str, minutes: Optional[int] = None) -> dict:
     """Record one observation and return updated pattern stats."""
     if minutes is None:
-        minutes = _minutes_now()
-    dow = _day_of_week_now()
+        minutes = _minutes_now(user_id)
+    dow = _day_of_week_now(user_id)
     log_temporal_observation(user_id, pattern_key, minutes, dow)
     return update_pattern_stats(user_id, pattern_key, label)
 
@@ -189,7 +219,7 @@ def predict_pattern(user_id: str, pattern_key: str) -> Optional[dict]:
     If the pattern is bimodal, returns prediction for the sub-pattern
     that applies today (by day-of-week), falling back to the earlier cluster.
     """
-    current_dow = _day_of_week_now()
+    current_dow = _day_of_week_now(user_id)
 
     # Try sub-patterns first
     for suffix in (":early", ":late"):
@@ -228,8 +258,8 @@ def detect_deviations(user_id: str, threshold_std: float = 1.5) -> list[dict]:
     Skips parent keys when bimodal sub-patterns exist (uses the sub-pattern instead).
     Only fires for patterns that typically occur today.
     """
-    current_minutes = _minutes_now()
-    current_dow = _day_of_week_now()
+    current_minutes = _minutes_now(user_id)
+    current_dow = _day_of_week_now(user_id)
     patterns = get_temporal_patterns(user_id)
     deviations = []
 

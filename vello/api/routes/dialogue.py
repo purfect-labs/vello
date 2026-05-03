@@ -1,15 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from vello.api.deps import get_current_user
-from vello.database import get_dialogue_history
+from vello.config import MAX_DIALOGUE_MESSAGE_CHARS
+from vello.database import (
+    get_dialogue_history,
+    record_rate_limit_attempt,
+    count_recent_rate_limit_attempts,
+)
 from vello.dialogue import chat
 
 router = APIRouter()
 
 
 class MessageBody(BaseModel):
-    message: str
+    # Bounded — every message hits the LLM, so unbounded input is a budget-drain vector.
+    message: str = Field(..., max_length=MAX_DIALOGUE_MESSAGE_CHARS)
 
 
 @router.get("/history")
@@ -18,10 +24,19 @@ def history(user=Depends(get_current_user)):
     return [{"role": r["role"], "content": r["content"], "created_at": r["created_at"]} for r in rows]
 
 
+# Per-user dialogue rate limit — protects against runaway loops draining LLM budget.
+_DIALOGUE_PER_HOUR = 60
+
+
 @router.post("/")
 def send_message(body: MessageBody, user=Depends(get_current_user)):
     if not body.message.strip():
         raise HTTPException(status_code=422, detail="empty_message")
+
+    if count_recent_rate_limit_attempts("dialogue", user["id"], window_seconds=3600) >= _DIALOGUE_PER_HOUR:
+        raise HTTPException(status_code=429, detail="too_many_messages",
+                            headers={"Retry-After": "3600"})
+    record_rate_limit_attempt("dialogue", user["id"])
 
     history = get_dialogue_history(user["id"], limit=1)
     is_first = len(history) == 0

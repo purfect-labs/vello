@@ -118,12 +118,17 @@ def chat(user_id: str, user_message: str, is_first_message: bool = False) -> dic
         mark_onboarding_complete(user_id)
 
     # ── Infer wake_time from first message of the day ──────────────────────────
+    # Only counts a "first message" as a wake-time observation if it lands in a
+    # plausible morning window in the user's local timezone. A night-owl
+    # messaging at 1am shouldn't poison the wake_time pattern.
     if user_message != "__init__" and _is_first_message_today(history):
         try:
-            from vello.temporal import log_observation
-            now = datetime.now(timezone.utc)
-            minutes = now.hour * 60 + now.minute
-            log_observation(user_id, "wake_time", "Wake time", minutes)
+            from vello.temporal import log_observation, user_local_now, WAKE_WINDOW
+            now_local = user_local_now(user_id)
+            minutes = now_local.hour * 60 + now_local.minute
+            wake_min, wake_max = WAKE_WINDOW
+            if wake_min <= minutes <= wake_max:
+                log_observation(user_id, "wake_time", "Wake time", minutes)
         except Exception:
             pass
 

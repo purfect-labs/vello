@@ -1,0 +1,9 @@
+dbs:
+  - path: /data/vello.db
+    replicas:
+      - url: s3://${LITESTREAM_BUCKET}/vello.db
+        access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+        secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+        region: ${LITESTREAM_REGION}
+        retention: 24h
+        sync-interval: 10s
