@@ -12,8 +12,12 @@ KORTEX_PUBLIC_KEY_URL: str = os.environ.get(
     "KORTEX_PUBLIC_KEY_URL",
     f"{KORTEX_API_URL}/developer/public-key",
 )
-RESEND_API_KEY: str     = os.environ.get("RESEND_API_KEY", "")
-BRIEFING_FROM: str      = os.environ.get("BRIEFING_FROM", "Vello <briefing@vello.flexflows.net>")
+# Email (AWS SES via boto3). Sender domain (vello.flexflows.net) must be a
+# verified SES identity in AWS_REGION. Production sending requires the SES
+# account to be out of sandbox. Runtime credentials come from the standard
+# boto3 chain: instance profile on EC2, env vars locally, or ~/.aws/credentials.
+AWS_REGION: str         = os.environ.get("AWS_REGION", "us-east-1")
+BRIEFING_FROM: str      = os.environ.get("BRIEFING_FROM", "Vello <noreply@vello.flexflows.net>")
 APP_URL: str            = os.environ.get("APP_URL", "https://vello.flexflows.net")
 
 # LLM provider: "anthropic" (default) or "openai" (any OpenAI-compatible endpoint)

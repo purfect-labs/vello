@@ -96,6 +96,7 @@ resource "aws_instance" "vello" {
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.vello.id]
   key_name               = var.key_pair_name
+  iam_instance_profile   = aws_iam_instance_profile.vello.name
 
   root_block_device {
     volume_size           = 20

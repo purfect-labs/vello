@@ -1,13 +1,14 @@
 """
-Daily briefing — generate HTML email and send via Resend.
+Daily briefing — generate HTML email and send via AWS SES.
 """
 import json
 import logging
 from datetime import datetime, timezone
 
-import resend
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 
-from vello.config import RESEND_API_KEY, BRIEFING_FROM, APP_URL
+from vello.config import APP_URL, AWS_REGION, BRIEFING_FROM
 from vello.database import (
     get_connection, get_context, get_active_triggers,
     get_temporal_patterns, get_pending_inferences,
@@ -165,25 +166,29 @@ def _render_html(data: dict, date_str: str) -> str:
 
 
 def send_briefing(user_id: str, email: str) -> bool:
-    if not RESEND_API_KEY:
-        log.warning("RESEND_API_KEY not set — skipping briefing for %s", email)
-        return False
-
     data = _get_briefing_data(user_id)
     date_str = datetime.now(timezone.utc).strftime("%A, %B %-d")
     html = _render_html(data, date_str)
 
-    resend.api_key = RESEND_API_KEY
     try:
-        resend.Emails.send({
-            "from":    BRIEFING_FROM,
-            "to":      [email],
-            "subject": f"Vello · {date_str}",
-            "html":    html,
-        })
+        boto3.client("ses", region_name=AWS_REGION).send_email(
+            Source=BRIEFING_FROM,
+            Destination={"ToAddresses": [email]},
+            Message={
+                "Subject": {"Data": f"Vello · {date_str}", "Charset": "UTF-8"},
+                "Body":    {"Html": {"Data": html, "Charset": "UTF-8"}},
+            },
+        )
         return True
-    except Exception as exc:
-        log.error("Resend error for %s: %s", email, exc)
+    except NoCredentialsError:
+        log.warning("AWS credentials missing — skipping briefing for %s", email)
+        return False
+    except ClientError as exc:
+        log.error("SES error for %s: %s", email,
+                  exc.response.get("Error", {}).get("Message", str(exc)))
+        return False
+    except (BotoCoreError, Exception) as exc:
+        log.error("SES error for %s: %s", email, exc)
         return False
 
 

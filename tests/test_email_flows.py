@@ -74,16 +74,45 @@ def test_change_password_updates_hash(registered_user_id):
     assert verify_password(refreshed, "secure-test-password-42") is False
 
 
-# ── Email sender — graceful no-op without RESEND_API_KEY ──────────────────────
+# ── Email sender — graceful behavior on missing AWS creds + on send error ────
 
-def test_send_verification_silent_without_resend_key(monkeypatch):
-    monkeypatch.setattr("vello.email.RESEND_API_KEY", "")
+def test_send_verification_silent_without_aws_creds(monkeypatch):
+    """Missing IAM creds shouldn't crash the registration flow — just log+return."""
+    from botocore.exceptions import NoCredentialsError
+
+    class _FakeSES:
+        def send_email(self, **_):
+            raise NoCredentialsError()
+
+    monkeypatch.setattr("vello.email.boto3.client", lambda *a, **kw: _FakeSES())
     from vello.email import send_verification_email
-    # Should not raise — just logs and returns
-    send_verification_email("user@example.com", "tok123")
+    assert send_verification_email("user@example.com", "tok123") is False
 
 
-def test_send_reset_silent_without_resend_key(monkeypatch):
-    monkeypatch.setattr("vello.email.RESEND_API_KEY", "")
+def test_send_reset_silent_without_aws_creds(monkeypatch):
+    from botocore.exceptions import NoCredentialsError
+
+    class _FakeSES:
+        def send_email(self, **_):
+            raise NoCredentialsError()
+
+    monkeypatch.setattr("vello.email.boto3.client", lambda *a, **kw: _FakeSES())
     from vello.email import send_password_reset_email
-    send_password_reset_email("user@example.com", "tok123")
+    assert send_password_reset_email("user@example.com", "tok123") is False
+
+
+def test_send_verification_returns_true_on_success(monkeypatch):
+    """Happy path: boto3 returns successfully → True."""
+    sent: dict = {}
+
+    class _FakeSES:
+        def send_email(self, **kwargs):
+            sent.update(kwargs)
+            return {"MessageId": "abc-123"}
+
+    monkeypatch.setattr("vello.email.boto3.client", lambda *a, **kw: _FakeSES())
+    from vello.email import send_verification_email
+    assert send_verification_email("user@example.com", "tok123") is True
+    assert sent["Destination"]["ToAddresses"] == ["user@example.com"]
+    assert "Verify" in sent["Message"]["Subject"]["Data"]
+    assert "tok123" in sent["Message"]["Body"]["Html"]["Data"]

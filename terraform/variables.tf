@@ -27,3 +27,13 @@ variable "ssh_cidr" {
   description = "CIDR allowed for SSH — restrict to your IP (e.g. 1.2.3.4/32)"
   default     = "0.0.0.0/0"
 }
+
+variable "sender_domain" {
+  description = "Domain verified in SES; sender addresses use *@<this>"
+  default     = "vello.flexflows.net"
+}
+
+variable "litestream_bucket" {
+  description = "S3 bucket for Litestream SQLite backups. Empty disables the IAM policy."
+  default     = ""
+}
