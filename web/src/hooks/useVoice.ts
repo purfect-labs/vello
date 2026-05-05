@@ -13,6 +13,39 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// ── SpeechRecognition Type Declarations (not in default TS DOM lib) ────────
+
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message?: string;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
+declare var SpeechRecognition: {
+  new (): SpeechRecognition;
+} | undefined;
+
+declare var webkitSpeechRecognition: {
+  new (): SpeechRecognition;
+} | undefined;
+
 // ── Types ────────────────────────────────────────────────────────────────
 
 export type VoiceMode = "push-to-talk" | "wake-word" | "always-on";
