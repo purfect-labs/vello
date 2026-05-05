@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import Nav from "../components/Nav";
+import VoiceButton from "../components/VoiceButton";
 import { api } from "../api";
 import { useAuth } from "../App";
+import { useVoice } from "../hooks/useVoice";
 import type { DialogueTurn } from "../types";
 import { V } from "../vello-tokens";
 
@@ -53,6 +55,23 @@ export default function DialoguePage() {
   const bottomRef                 = useRef<HTMLDivElement>(null);
   const inputRef                  = useRef<HTMLTextAreaElement>(null);
 
+  // ── Voice ─────────────────────────────────────────────────────────────────
+  const [voiceMode, setVoiceMode] = useState<"push-to-talk" | "wake-word" | "always-on">("push-to-talk");
+  const voice = useVoice({
+    mode: voiceMode,
+    autoSpeak: true,
+    onFinalResult: (transcript) => {
+      if (transcript.trim()) {
+        setInput(transcript.trim());
+        // Auto-send after brief delay for voice input to feel natural
+        setTimeout(() => sendWithText(transcript.trim()), 300);
+      }
+    },
+    onError: (err) => {
+      console.warn("[Vello Voice]", err);
+    },
+  });
+
   useEffect(() => {
     api.dialogue.history().then(h => {
       setHistory(h as DialogueTurn[]);
@@ -76,9 +95,8 @@ export default function DialoguePage() {
     }
   }
 
-  async function send() {
-    const text = input.trim();
-    if (!text || sending) return;
+  async function sendWithText(text: string) {
+    if (!text.trim() || sending) return;
     setInput("");
     setHistory(h => [...h, { role: "user", content: text, created_at: new Date().toISOString() }]);
     setSending(true);
@@ -86,6 +104,7 @@ export default function DialoguePage() {
     try {
       const res = await api.dialogue.send(text);
       setHistory(h => [...h, { role: "assistant", content: res.message, created_at: new Date().toISOString() }]);
+      voice.speak(res.message);
       if (res.onboarding_complete) await refreshUser();
     } catch {
       setHistory(h => [...h, { role: "assistant", content: "Something went wrong. Please try again.", created_at: new Date().toISOString() }]);
@@ -94,6 +113,10 @@ export default function DialoguePage() {
       setStreaming(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
+  }
+
+  async function send() {
+    await sendWithText(input);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -156,7 +179,7 @@ export default function DialoguePage() {
               onInput={handleInput}
               onFocus={() => setInputFocus(true)}
               onBlur={() => setInputFocus(false)}
-              placeholder="say anything…"
+              placeholder={voice.isSupported ? "say anything… or click 🎤 to speak" : "say anything…"}
               rows={1}
               disabled={sending}
               style={{
@@ -171,6 +194,43 @@ export default function DialoguePage() {
                 fontFamily: V.sans,
               }}
             />
+            <VoiceButton
+              state={voice.state}
+              isSupported={voice.isSupported}
+              listening={voice.listening}
+              onToggle={() => {
+                if (voice.listening) {
+                  voice.stopListening();
+                } else {
+                  voice.startListening();
+                }
+              }}
+            />
+            {voice.isSupported && (
+              <button
+                type="button"
+                onClick={() => {
+                  const modes: Array<"push-to-talk" | "wake-word" | "always-on"> = [
+                    "push-to-talk", "wake-word", "always-on",
+                  ];
+                  const next = modes[(modes.indexOf(voiceMode) + 1) % modes.length];
+                  setVoiceMode(next);
+                  voice.setMode(next);
+                }}
+                title={`Mode: ${voiceMode}. Click to cycle.`}
+                style={{
+                  fontFamily: V.sans, fontSize: 11,
+                  padding: "2px 8px", borderRadius: 10,
+                  border: `1px solid ${V.border}`,
+                  background: "transparent",
+                  color: V.inkFaint,
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                {voiceMode === "push-to-talk" ? "🎤 PTT" : voiceMode === "wake-word" ? "🗣️ Wake" : "🔴 Live"}
+              </button>
+            )}
             <button
               onClick={send}
               disabled={!input.trim() || sending}
