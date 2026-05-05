@@ -20,6 +20,14 @@ resource "aws_iam_instance_profile" "vello" {
   role = aws_iam_role.vello.name
 }
 
+# AWS Systems Manager — gives the EC2 a registered SSM agent presence,
+# enabling SSH-less ops (aws ssm start-session, parameter store reads).
+# AmazonSSMManagedInstanceCore is the AWS-managed minimum-privilege policy.
+resource "aws_iam_role_policy_attachment" "vello_ssm" {
+  role       = aws_iam_role.vello.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # Send-only SES policy, scoped to the verified sender domain. ses:SendRawEmail
 # is included so future MIME / attachment use (calendar invites, etc.) works
 # without re-applying terraform.
