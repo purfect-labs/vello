@@ -87,7 +87,16 @@ def chat(user_id: str, user_message: str, is_first_message: bool = False) -> dic
     history = get_dialogue_history(user_id, limit=20)
     context = context_as_text(user_id)
 
-    system = SYSTEM_PROMPT.format(context=context or "Nothing known yet.")
+    # Include inferred hypothesis patterns when available
+    hyp_ctx = ""
+    try:
+        from vello.hypotheses import hypotheses_as_context
+        hyp_ctx = hypotheses_as_context(user_id)
+    except Exception:
+        pass
+
+    full_context = "\n\n".join(filter(None, [context or "Nothing known yet.", hyp_ctx]))
+    system = SYSTEM_PROMPT.format(context=full_context)
     if is_first_message:
         system += f"\n\n{ONBOARDING_OPENER}"
 
@@ -137,6 +146,21 @@ def chat(user_id: str, user_message: str, is_first_message: bool = False) -> dic
         try:
             from vello.signals import fire_signals
             fire_signals(user_id, user_message)
+        except Exception:
+            pass
+
+    # ── Hypothesis meta-learning ───────────────────────────────────────────────
+    # Score the conversation against open hypotheses; occasionally propose new ones.
+    # Runs after the response so it doesn't add to response latency.
+    if user_message != "__init__":
+        try:
+            from vello.hypotheses import score_against, propose_for_user, PROPOSE_FREQUENCY
+            obs = f"USER: {user_message}\nASSISTANT: {assistant_message}"
+            # Use turn count from history length as the session_id proxy
+            session_id = str(len(history) // 2)
+            score_against(user_id, obs, session_id=session_id)
+            if (len(history) // 2) % PROPOSE_FREQUENCY == 0:
+                propose_for_user(user_id)
         except Exception:
             pass
 

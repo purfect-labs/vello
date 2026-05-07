@@ -314,6 +314,34 @@ def _apply_schema_migrations(conn: sqlite3.Connection) -> None:
             log.error("schema migration v3 failed: %s", exc)
             raise
 
+    # v4: hypotheses meta-learning table
+    if 4 not in applied:
+        try:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS hypotheses (
+                    id                  TEXT PRIMARY KEY,
+                    user_id             TEXT NOT NULL,
+                    hypothesis_type     TEXT NOT NULL,
+                    description         TEXT NOT NULL,
+                    domain_hint         TEXT,
+                    evidence_count      INTEGER NOT NULL DEFAULT 0,
+                    contradiction_count INTEGER NOT NULL DEFAULT 0,
+                    session_count       INTEGER NOT NULL DEFAULT 0,
+                    confidence          REAL NOT NULL DEFAULT 0.0,
+                    last_evidence_at    TEXT,
+                    status              TEXT NOT NULL DEFAULT 'candidate',
+                    user_attested       INTEGER NOT NULL DEFAULT 0,
+                    created_at          TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_hypotheses_user_status
+                    ON hypotheses(user_id, status, confidence DESC);
+            """)
+            _stamp(4)
+        except Exception as exc:
+            log.error("schema migration v4 failed: %s", exc)
+            raise
+
 
 # ── Users ──────────────────────────────────────────────────────────────────────
 
