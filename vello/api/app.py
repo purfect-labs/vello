@@ -26,6 +26,7 @@ from vello.api.routes.gaps import router as gaps_router
 from vello.api.routes.briefing import router as briefing_router
 from vello.api.routes.webhook import router as webhook_router
 from vello.api.routes.waitlist import router as waitlist_router
+from vello.api.routes.hypotheses import router as hypotheses_router
 
 
 @asynccontextmanager
@@ -78,6 +79,7 @@ def create_app() -> FastAPI:
     app.include_router(briefing_router,    prefix="/api/v1/briefing",   tags=["briefing"])
     app.include_router(webhook_router,     prefix="/api/v1/webhook",    tags=["webhook"])
     app.include_router(waitlist_router,    prefix="/api/v1",            tags=["waitlist"])
+    app.include_router(hypotheses_router,  prefix="/api/v1/hypotheses", tags=["hypotheses"])
 
     @app.get("/health", include_in_schema=False)
     async def health():

@@ -292,6 +292,56 @@ def _apply_schema_migrations(conn: sqlite3.Connection) -> None:
             log.error("schema migration v2 failed: %s", exc)
             raise
 
+    # v3: email verification + password reset tokens
+    if 3 not in applied:
+        try:
+            _add_column_if_missing("users", "email_verified",       "INTEGER NOT NULL DEFAULT 0")
+            _add_column_if_missing("users", "verification_token",   "TEXT")
+            _add_column_if_missing("users", "verification_sent_at", "TEXT")
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                    token      TEXT PRIMARY KEY,
+                    user_id    TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    used       INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_password_reset_user
+                    ON password_reset_tokens(user_id);
+            """)
+            _stamp(3)
+        except Exception as exc:
+            log.error("schema migration v3 failed: %s", exc)
+            raise
+
+    # v4: hypotheses meta-learning table
+    if 4 not in applied:
+        try:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS hypotheses (
+                    id                  TEXT PRIMARY KEY,
+                    user_id             TEXT NOT NULL,
+                    hypothesis_type     TEXT NOT NULL,
+                    description         TEXT NOT NULL,
+                    domain_hint         TEXT,
+                    evidence_count      INTEGER NOT NULL DEFAULT 0,
+                    contradiction_count INTEGER NOT NULL DEFAULT 0,
+                    session_count       INTEGER NOT NULL DEFAULT 0,
+                    confidence          REAL NOT NULL DEFAULT 0.0,
+                    last_evidence_at    TEXT,
+                    status              TEXT NOT NULL DEFAULT 'candidate',
+                    user_attested       INTEGER NOT NULL DEFAULT 0,
+                    created_at          TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_hypotheses_user_status
+                    ON hypotheses(user_id, status, confidence DESC);
+            """)
+            _stamp(4)
+        except Exception as exc:
+            log.error("schema migration v4 failed: %s", exc)
+            raise
+
 
 # ── Users ──────────────────────────────────────────────────────────────────────
 
@@ -371,6 +421,99 @@ def set_kortex_token(user_id: str, token: str) -> None:
     conn = get_connection()
     with conn:
         conn.execute("UPDATE users SET kortex_token=? WHERE id=?", (enc, user_id))
+    conn.close()
+
+
+def change_password(user_id: str, new_password: str) -> None:
+    """Hash + persist a new password. Caller is responsible for authorization."""
+    new_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    conn = get_connection()
+    with conn:
+        conn.execute("UPDATE users SET password_hash=? WHERE id=?", (new_hash, user_id))
+    conn.close()
+
+
+# ── Email verification ────────────────────────────────────────────────────────
+
+def set_verification_token(user_id: str, token: str) -> None:
+    conn = get_connection()
+    with conn:
+        conn.execute(
+            "UPDATE users SET verification_token=?, verification_sent_at=? WHERE id=?",
+            (token, now(), user_id),
+        )
+    conn.close()
+
+
+def verify_email_token(token: str) -> Optional[sqlite3.Row]:
+    """
+    Returns the user row if token is valid and < 24h old; clears the token
+    on success. Returns None for unknown/expired tokens.
+    """
+    from datetime import timedelta
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM users WHERE verification_token=?", (token,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return None
+    sent_at = row["verification_sent_at"]
+    try:
+        sent_dt = datetime.fromisoformat(sent_at)
+    except (TypeError, ValueError):
+        conn.close()
+        return None
+    # SQLite's datetime() returns naive ISO strings; assume UTC so the
+    # comparison below doesn't TypeError on offset-aware vs. -naive mismatch.
+    if sent_dt.tzinfo is None:
+        sent_dt = sent_dt.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) - sent_dt > timedelta(hours=24):
+        conn.close()
+        return None
+    with conn:
+        conn.execute(
+            "UPDATE users SET email_verified=1, verification_token=NULL, "
+            "verification_sent_at=NULL WHERE id=?",
+            (row["id"],),
+        )
+    refreshed = conn.execute("SELECT * FROM users WHERE id=?", (row["id"],)).fetchone()
+    conn.close()
+    return refreshed
+
+
+# ── Password reset ────────────────────────────────────────────────────────────
+
+def create_password_reset_token(user_id: str) -> str:
+    """One-hour TTL. Caller should rate-limit before reaching this."""
+    from datetime import timedelta
+    token = secrets.token_urlsafe(32)
+    expires_at = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    conn = get_connection()
+    with conn:
+        conn.execute(
+            "INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
+            (token, user_id, expires_at),
+        )
+    conn.close()
+    return token
+
+
+def get_valid_reset_token(token: str) -> Optional[sqlite3.Row]:
+    """Returns the row iff the token is unused and not expired."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM password_reset_tokens WHERE token=? AND used=0 AND expires_at > ?",
+        (token, now()),
+    ).fetchone()
+    conn.close()
+    return row
+
+
+def consume_reset_token(token: str) -> None:
+    conn = get_connection()
+    with conn:
+        conn.execute("UPDATE password_reset_tokens SET used=1 WHERE token=?", (token,))
     conn.close()
 
 
