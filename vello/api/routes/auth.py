@@ -1,6 +1,6 @@
 import asyncio
 
-from fastapi import APIRouter, Cookie, HTTPException, Request, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, EmailStr
 
 from vello.api.deps import create_access_token, get_current_user
@@ -130,3 +130,55 @@ def export_account(user=__import__("fastapi").Depends(get_current_user),
         "action_log":       action_log,
         "location_events":  location_events,
     }
+
+
+# ── Google Calendar OAuth ─────────────────────────────────────────────────────
+
+@router.get("/oauth/google")
+def google_oauth_start(user=Depends(get_current_user)):
+    """Return the Google consent URL. Frontend redirects the user there."""
+    from vello.agent.integrations.calendar import get_auth_url
+    try:
+        url = get_auth_url(state=user["id"])
+        return {"auth_url": url}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+@router.get("/oauth/google/callback")
+def google_oauth_callback(code: str = "", error: str = "", state: str = "",
+                           user=Depends(get_current_user)):
+    """
+    Called by Google after the user grants consent.
+    Exchanges the code for tokens, encrypts and stores them.
+    Redirects to /settings on completion.
+    """
+    from fastapi.responses import RedirectResponse
+    from vello.agent.integrations.calendar import exchange_code
+    from datetime import datetime as _dt, timedelta, timezone as _tz
+    from vello import database as db
+
+    if error:
+        return RedirectResponse(url=f"/settings?oauth_error={error}")
+
+    if not code:
+        raise HTTPException(status_code=400, detail="missing_code")
+
+    try:
+        tokens = exchange_code(code)
+    except Exception as exc:
+        return RedirectResponse(url="/settings?oauth_error=exchange_failed")
+
+    access_token  = tokens.get("access_token", "")
+    refresh_token = tokens.get("refresh_token", "")
+    expires_in    = int(tokens.get("expires_in", 3600))
+    expires_at    = (_dt.now(_tz.utc) + timedelta(seconds=expires_in)).isoformat()
+
+    db.set_oauth_token(
+        user["id"], "google",
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_at=expires_at,
+        scopes=tokens.get("scope"),
+    )
+    return RedirectResponse(url="/settings?oauth_success=google")

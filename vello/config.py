@@ -33,6 +33,33 @@ MAX_DIALOGUE_MESSAGE_CHARS: int = int(os.environ.get("MAX_DIALOGUE_MESSAGE_CHARS
 
 ONBOARDING_SEQUENCE = ["schedule", "work", "fitness"]
 
+# ── Integrations (all optional — missing key → tool reports unavailable) ──────
+
+# Google Calendar OAuth 2.0
+GCAL_CLIENT_ID: str     = os.environ.get("GCAL_CLIENT_ID", "")
+GCAL_CLIENT_SECRET: str = os.environ.get("GCAL_CLIENT_SECRET", "")
+GCAL_REDIRECT_URI: str  = os.environ.get("GCAL_REDIRECT_URI", f"{APP_URL}/api/v1/auth/oauth/google/callback")
+
+# Twilio SMS
+TWILIO_ACCOUNT_SID: str = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN: str  = os.environ.get("TWILIO_AUTH_TOKEN", "")
+TWILIO_FROM_NUMBER: str = os.environ.get("TWILIO_FROM_NUMBER", "")   # E.164
+
+# OpenWeather
+OPENWEATHER_API_KEY: str = os.environ.get("OPENWEATHER_API_KEY", "")
+
+# Google Maps (geocoding)
+GMAPS_API_KEY: str = os.environ.get("GMAPS_API_KEY", "")
+
+# AfterShip package tracking
+AFTERSHIP_API_KEY: str = os.environ.get("AFTERSHIP_API_KEY", "")
+
+# Web Push (VAPID) — generate with: python -c "from py_vapid import Vapid; v=Vapid(); v.generate_keys(); print(v.private_pem().decode()); print(v.public_key.public_bytes_raw().hex())"
+# Or use: npx web-push generate-vapid-keys
+VAPID_PRIVATE_KEY: str = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_PUBLIC_KEY: str  = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_SUBJECT: str     = os.environ.get("VAPID_SUBJECT", f"mailto:{os.environ.get('BRIEFING_FROM', 'vello@vello.flexflows.net').split('<')[-1].strip('>')}")
+
 
 def validate_config() -> None:
     """Fail fast at startup if security-critical variables are missing or weak."""

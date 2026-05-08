@@ -96,3 +96,85 @@ def regenerate_token(user=Depends(get_current_user)):
         conn.execute("UPDATE users SET webhook_token=? WHERE id=?", (token, user["id"]))
     conn.close()
     return {"token": token}
+
+
+# ── Structured event webhooks ─────────────────────────────────────────────────
+#
+# Callers (AfterShip, Google Calendar push, etc.) POST a structured envelope:
+#   {"source": "aftership" | "google_calendar" | "custom", "event": {...}}
+# Vello normalizes it, records it as an ambient_event, and fires an agent turn.
+
+class EventEnvelope(BaseModel):
+    source: str
+    event: dict
+
+
+@router.post("/event")
+def ingest_event(body: EventEnvelope, x_webhook_token: str = Header(...)):
+    """
+    Structured external event — delivery update, calendar push, custom.
+    Classified and routed to the agent loop or ambient queue.
+    """
+    user = _get_user_by_token(x_webhook_token)
+    if not user:
+        raise HTTPException(status_code=401, detail="invalid_token")
+
+    uid = user["id"]
+    normalized_kind, trigger_payload = _classify_event(body.source, body.event)
+
+    from vello import database as db
+    hh = db.get_or_create_household(uid)
+
+    # Record as ambient_event for the audit trail
+    db.record_ambient_event(uid, hh["id"], body.source, body.event)
+
+    # Route: high-value events trigger an agent turn directly; noisy ones
+    # are classified and queued as ambient_events for the next scheduled sweep.
+    _DIRECT_TRIGGER_KINDS = {
+        "webhook:delivery_delivered",
+        "webhook:delivery_failed",
+        "webhook:calendar_update",
+    }
+
+    if normalized_kind in _DIRECT_TRIGGER_KINDS:
+        from vello.agent.loop import run_agent_turn
+        result = run_agent_turn(
+            user_id=uid,
+            trigger_kind=normalized_kind,
+            trigger_payload=trigger_payload,
+        )
+        return {
+            "ok": True, "kind": normalized_kind,
+            "session_id": result.session_id, "outcome": result.outcome,
+        }
+
+    return {"ok": True, "kind": normalized_kind, "queued": True}
+
+
+def _classify_event(source: str, event: dict) -> tuple[str, dict]:
+    """
+    Map a raw source+event into a normalized (trigger_kind, payload) pair.
+    The trigger_kind is used by the agent loop and campaign watchers.
+    """
+    src = source.lower()
+
+    if src == "aftership":
+        tag = event.get("tag", "").lower()
+        tracking_id = event.get("tracking_number") or event.get("id", "")
+        if tag == "delivered":
+            return "webhook:delivery_delivered", {"tracking_id": tracking_id, "status": "delivered", "raw": event}
+        if tag in ("failedattempt", "exception"):
+            return "webhook:delivery_failed", {"tracking_id": tracking_id, "status": tag, "raw": event}
+        return "webhook:delivery_transit", {"tracking_id": tracking_id, "status": tag, "raw": event}
+
+    if src in ("google_calendar", "gcal"):
+        resource_state = event.get("resourceState", event.get("resource_state", ""))
+        return "webhook:calendar_update", {
+            "resource_state": resource_state,
+            "resource_id":    event.get("resourceId") or event.get("resource_id", ""),
+            "raw":            event,
+        }
+
+    # Generic / Zapier / Make webhook — run signal scan on any text fields
+    text_parts = [str(v) for v in event.values() if isinstance(v, str)]
+    return "webhook:custom", {"text": " ".join(text_parts), "source": source, "raw": event}

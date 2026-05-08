@@ -4,6 +4,7 @@ import { api } from "./api";
 import type { User } from "./types";
 import AuthPage from "./pages/AuthPage";
 import DashboardPage from "./pages/DashboardPage";
+import HomePage from "./pages/HomePage";
 import DialoguePage from "./pages/DialoguePage";
 import LifeContextPage from "./pages/LifeContextPage";
 import RoutinesPage from "./pages/RoutinesPage";
@@ -69,7 +70,7 @@ function RootRoute() {
       <span style={{ color: "#333", fontSize: 12, letterSpacing: "0.2em" }}>VELLO</span>
     </div>
   );
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) return <Navigate to="/home" replace />;
   return <LandingPage />;
 }
 
@@ -81,6 +82,7 @@ export default function App() {
           <Route path="/"          element={<RootRoute />} />
           <Route path="/login"     element={<AuthPage mode="login" />} />
           <Route path="/register"  element={<AuthPage mode="register" />} />
+          <Route path="/home"       element={<Protected><HomePage /></Protected>} />
           <Route path="/dashboard" element={<Protected><DashboardPage /></Protected>} />
           <Route path="/dialogue"  element={<Protected><DialoguePage /></Protected>} />
           <Route path="/profile"   element={<Protected><LifeContextPage /></Protected>} />

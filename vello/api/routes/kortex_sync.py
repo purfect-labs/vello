@@ -133,6 +133,9 @@ async def import_from_kortex(user=Depends(get_current_user)):
         )
         contradictions_imported += 1
 
+    # ── Enriched import: seed household model from Kortex triples + facts ─────
+    household_seeded = _seed_household_from_kortex(user["id"], data)
+
     return {
         "imported_context":         imported_context,
         "imported_facts":           imported_facts,
@@ -141,6 +144,99 @@ async def import_from_kortex(user=Depends(get_current_user)):
         "kortex_last_activity_at":  data.get("last_activity_at"),
         "kortex_profile_version":   data.get("profile_version"),
         "email":                    data.get("email"),
+        "household_seeded":         household_seeded,
+    }
+
+
+def _seed_household_from_kortex(user_id: str, data: dict) -> dict:
+    """
+    Walk Kortex triples + facts to seed Vello's household model:
+      - Relationship triples → household_members
+      - Address triple → households.address (geocode if Google Maps key available)
+      - Dietary/allergy facts → member_preferences + grocery list filters
+
+    Returns a summary dict for the API response.
+    """
+    from vello import database as db
+
+    hh = db.get_or_create_household(user_id)
+    hh_id = hh["id"]
+
+    members_upserted = 0
+    prefs_upserted = 0
+
+    triples = data.get("triples", []) or []
+    facts = data.get("facts", []) or []
+
+    # Predicate → (kind, relationship)
+    _RELATIONSHIP_PREDICATES = {
+        "lives_with":       ("person", "household"),
+        "married_to":       ("person", "partner"),
+        "partner_of":       ("person", "partner"),
+        "spouse_of":        ("person", "partner"),
+        "parent_of":        ("child", "child"),
+        "child_of":         ("person", "parent"),
+        "has_pet":          ("pet", "pet"),
+        "owns_pet":         ("pet", "pet"),
+        "has_dog":          ("pet", "dog"),
+        "has_cat":          ("pet", "cat"),
+        "sibling_of":       ("person", "sibling"),
+        "roommate_of":      ("person", "roommate"),
+    }
+
+    for triple in triples:
+        pred = (triple.get("predicate") or "").lower()
+        if pred not in _RELATIONSHIP_PREDICATES:
+            continue
+        obj = triple.get("object")
+        if not obj or not isinstance(obj, str):
+            continue
+        kind, relationship = _RELATIONSHIP_PREDICATES[pred]
+        db.upsert_household_member(
+            hh_id, kind=kind, name=obj, relationship=relationship,
+        )
+        members_upserted += 1
+
+    # Address triple
+    for triple in triples:
+        pred = (triple.get("predicate") or "").lower()
+        if pred in ("lives_at", "home_address", "address"):
+            addr = triple.get("object")
+            if addr and isinstance(addr, str):
+                conn = db.get_connection()
+                with conn:
+                    conn.execute(
+                        "UPDATE households SET address=? WHERE id=? AND address IS NULL",
+                        (addr, hh_id),
+                    )
+                conn.close()
+                break
+
+    # Facts: allergies, dietary restrictions → member_preferences
+    # We seed these on a synthetic "owner" entity if no specific member found.
+    _DIETARY_KEYS = {"allergy", "allergies", "dietary_restriction",
+                     "food_preference", "diet", "intolerance"}
+
+    owner_mid: str | None = None
+
+    for fact in facts:
+        key = (fact.get("key") or "").lower()
+        domain = (fact.get("domain") or "").lower()
+        val = str(fact.get("value") or "")
+        if not val:
+            continue
+        if domain in ("health", "preferences") and any(k in key for k in _DIETARY_KEYS):
+            # Seed on the owner member (lazy-create a self-member once)
+            if owner_mid is None:
+                owner_mid = db.upsert_household_member(
+                    hh_id, kind="person", name="Me (owner)", relationship="owner",
+                )
+            db.upsert_member_preference(owner_mid, domain, key, val, source="kortex")
+            prefs_upserted += 1
+
+    return {
+        "members_upserted": members_upserted,
+        "prefs_upserted":   prefs_upserted,
     }
 
 

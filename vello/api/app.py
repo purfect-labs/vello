@@ -27,6 +27,15 @@ from vello.api.routes.briefing import router as briefing_router
 from vello.api.routes.webhook import router as webhook_router
 from vello.api.routes.waitlist import router as waitlist_router
 from vello.api.routes.hypotheses import router as hypotheses_router
+from vello.api.routes.household import router as household_router
+from vello.api.routes.world import router as world_router
+from vello.api.routes.lists import router as lists_router
+from vello.api.routes.inventory import router as inventory_router
+from vello.api.routes.drafts import router as drafts_router
+from vello.api.routes.agent import router as agent_router
+from vello.api.routes.playbooks import router as playbooks_router
+from vello.api.routes.integrations import router as integrations_router
+from vello.api.routes.push import router as push_router
 
 
 @asynccontextmanager
@@ -35,6 +44,8 @@ async def lifespan(app: FastAPI):
     setup_logging()
     validate_config()
     init_db()
+    from vello.agent.playbooks import seed_builtins
+    seed_builtins()
     start_scheduler()
     yield
     stop_scheduler()
@@ -80,6 +91,15 @@ def create_app() -> FastAPI:
     app.include_router(webhook_router,     prefix="/api/v1/webhook",    tags=["webhook"])
     app.include_router(waitlist_router,    prefix="/api/v1",            tags=["waitlist"])
     app.include_router(hypotheses_router,  prefix="/api/v1/hypotheses", tags=["hypotheses"])
+    app.include_router(household_router,   prefix="/api/v1/household",  tags=["household"])
+    app.include_router(world_router,       prefix="/api/v1/world",      tags=["world"])
+    app.include_router(lists_router,       prefix="/api/v1/lists",      tags=["lists"])
+    app.include_router(inventory_router,   prefix="/api/v1/inventory",  tags=["inventory"])
+    app.include_router(drafts_router,      prefix="/api/v1/drafts",     tags=["drafts"])
+    app.include_router(agent_router,       prefix="/api/v1/agent",      tags=["agent"])
+    app.include_router(playbooks_router,    prefix="/api/v1/playbooks",     tags=["playbooks"])
+    app.include_router(integrations_router, prefix="/api/v1/integrations",  tags=["integrations"])
+    app.include_router(push_router,         prefix="/api/v1/push",           tags=["push"])
 
     @app.get("/health", include_in_schema=False)
     async def health():

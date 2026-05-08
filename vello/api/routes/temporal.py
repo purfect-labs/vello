@@ -58,4 +58,17 @@ def predict(pattern_key: str, user=Depends(get_current_user)):
 @router.get("/deviations")
 def deviations(user=Depends(get_current_user)):
     """Return patterns where the user is currently running late."""
-    return detect_deviations(user["id"])
+    devs = detect_deviations(user["id"])
+    # Push a notification for the first (most urgent) deviation, if any.
+    if devs:
+        try:
+            from vello.push import notify_temporal_deviation
+            d = devs[0]
+            notify_temporal_deviation(
+                user["id"],
+                pattern_key=d.get("pattern_key", "routine"),
+                message=d.get("message", "You may be running late."),
+            )
+        except Exception:
+            pass
+    return devs

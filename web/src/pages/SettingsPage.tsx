@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Nav from "../components/Nav";
 import { api } from "../api";
 import { useAuth } from "../App";
 import { V } from "../vello-tokens";
+import { usePush } from "../hooks/usePush";
 
 function Mono({ children, size = 10, color, style }: {
   children: React.ReactNode; size?: number; color?: string; style?: React.CSSProperties;
@@ -358,6 +359,18 @@ export default function SettingsPage() {
           </div>
         </SettingCard>
 
+        {/* Integrations */}
+        <IntegrationsCard />
+
+        {/* Agent autonomy */}
+        <AgentPolicyCard />
+
+        {/* Cost budget */}
+        <CostBudgetCard />
+
+        {/* Push notifications */}
+        <PushCard />
+
         {/* Account */}
         <SettingCard title="account" description="your vello account details.">
           <span style={{ fontFamily: V.mono, fontSize: 13, color: V.ink }}>{user?.email}</span>
@@ -378,5 +391,291 @@ export default function SettingsPage() {
         </SettingCard>
       </div>
     </div>
+  );
+}
+
+
+// ── Integrations card ─────────────────────────────────────────────────────────
+
+interface IntegrationStatus {
+  available: boolean;
+  connected: boolean;
+  note?: string;
+  provider?: string;
+}
+
+function IntegrationsCard() {
+  const [statuses, setStatuses] = useState<Record<string, IntegrationStatus>>({});
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await (api as unknown as { integrations: { list: () => Promise<Record<string, IntegrationStatus>> } }).integrations.list();
+      setStatuses(data);
+    } catch { /* ignore */ } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Add integrations API to api object via augmentation
+  if (!(api as unknown as Record<string, unknown>).integrations) {
+    (api as unknown as Record<string, unknown>).integrations = {
+      list: () => fetch("/api/v1/integrations/", { credentials: "include" }).then((r) => r.json()),
+      disconnect: (p: string) => fetch(`/api/v1/integrations/${p}`, { method: "DELETE", credentials: "include" }),
+    };
+  }
+
+  const LABELS: Record<string, string> = {
+    google_calendar: "Google Calendar",
+    twilio_sms:      "Twilio SMS",
+    openweather:     "OpenWeather",
+    google_maps:     "Google Maps",
+    aftership:       "AfterShip tracking",
+  };
+
+  return (
+    <SettingCard
+      title="integrations"
+      description="connect external services so Vello can read your calendar, check weather, send messages, and track deliveries."
+    >
+      {loading ? (
+        <Mono size={12} color={V.inkFaint}>loading…</Mono>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {Object.entries(statuses).map(([key, s]) => (
+            <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{
+                  width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+                  background: s.connected ? "#22c55e" : s.available ? V.border : V.inkFaint,
+                }} />
+                <span style={{ fontFamily: V.sans, fontSize: 13, color: s.available ? V.ink : V.inkFaint }}>
+                  {LABELS[key] || key}
+                </span>
+              </div>
+              <div>
+                {!s.available && (
+                  <Mono size={10} color={V.inkFaint}>{s.note || "not configured"}</Mono>
+                )}
+                {s.available && !s.connected && s.provider === "google" && (
+                  <GhostBtn onClick={() => {
+                    fetch("/api/v1/auth/oauth/google", { credentials: "include" })
+                      .then((r) => r.json())
+                      .then((d: { auth_url?: string }) => { if (d.auth_url) window.location.href = d.auth_url; })
+                      .catch(() => {});
+                  }} disabled={false}>
+                    Connect
+                  </GhostBtn>
+                )}
+                {s.available && !s.connected && !s.provider && (
+                  <Mono size={10} color={V.inkFaint}>{s.note || "set env var"}</Mono>
+                )}
+                {s.connected && s.provider === "google" && (
+                  <GhostBtn onClick={async () => {
+                    await fetch(`/api/v1/integrations/google`, { method: "DELETE", credentials: "include" });
+                    load();
+                  }} disabled={false}>
+                    Disconnect
+                  </GhostBtn>
+                )}
+                {s.connected && !s.provider && (
+                  <Mono size={10} color="#22c55e">connected</Mono>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </SettingCard>
+  );
+}
+
+
+// ── Agent policy card ─────────────────────────────────────────────────────────
+
+function AgentPolicyCard() {
+  const [candidates, setCandidates] = useState<Array<{ tool: string; confirmed: number; dismissed: number }>>([]);
+  const [policy, setPolicy] = useState<Record<string, unknown>>({});
+
+  useEffect(() => {
+    api.agent.promotionCandidates().then(setCandidates).catch(() => {});
+    api.agent.getPolicy().then(setPolicy).catch(() => {});
+  }, []);
+
+  if (!candidates.length && !Object.keys((policy.tools as Record<string,string> || {})).length) return null;
+
+  const toolsPolicy = (policy.tools as Record<string, string>) || {};
+  const autoTools = Object.entries(toolsPolicy).filter(([, v]) => v === "auto").map(([k]) => k);
+
+  return (
+    <SettingCard
+      title="agent autonomy"
+      description="tools Vello is allowed to execute automatically, without drafting first."
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {autoTools.length === 0 && candidates.length === 0 && (
+          <Mono size={12} color={V.inkFaint}>no tools promoted yet. Confirm drafts to build trust.</Mono>
+        )}
+
+        {/* Already auto tools */}
+        {autoTools.map((t) => (
+          <div key={t} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontFamily: V.mono, fontSize: 12, color: V.ink }}>{t.replace(/_/g, " ")}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Mono size={10} color="#22c55e">automatic</Mono>
+              <GhostBtn onClick={async () => {
+                const newTools = { ...toolsPolicy };
+                delete newTools[t];
+                const newPolicy = { ...policy, tools: newTools };
+                await api.agent.setPolicy(newPolicy);
+                setPolicy(newPolicy);
+              }} disabled={false}>
+                Revert
+              </GhostBtn>
+            </div>
+          </div>
+        ))}
+
+        {/* Promotion candidates */}
+        {candidates.map((c) => (
+          <div key={c.tool} style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "8px 12px", border: `1px solid ${V.border}`, borderRadius: 8,
+          }}>
+            <div>
+              <span style={{ fontFamily: V.mono, fontSize: 12, color: V.ink }}>{c.tool.replace(/_/g, " ")}</span>
+              <Mono size={10} color={V.inkDim} style={{ display: "block", marginTop: 2 }}>
+                confirmed {c.confirmed}× — eligible for automatic
+              </Mono>
+            </div>
+            <PrimaryBtn onClick={async () => {
+              await api.agent.acceptPromotion(c.tool).catch(() => {});
+              const updated = await api.agent.getPolicy().catch(() => policy);
+              setPolicy(updated as Record<string, unknown>);
+              setCandidates((cs) => cs.filter((x) => x.tool !== c.tool));
+            }} disabled={false}>
+              Enable
+            </PrimaryBtn>
+          </div>
+        ))}
+      </div>
+    </SettingCard>
+  );
+}
+
+
+// ── Cost budget card ──────────────────────────────────────────────────────────
+
+function CostBudgetCard() {
+  type CostData = { day: string; total_usd: number; cap_usd: number; remaining_usd: number; cap_reached: boolean; by_integration: Array<{ integration: string; cost_usd: number; calls: number }> };
+  const [data, setData]     = useState<CostData | null>(null);
+  const [cap, setCap]       = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.agent.getCost().then(setData).catch(() => {});
+  }, []);
+
+  if (!data) return null;
+
+  return (
+    <SettingCard
+      title="integration costs"
+      description="daily spend cap prevents runaway integration costs. integrations like SMS and calendar writes have small per-call fees."
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Summary bar */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1, height: 4, background: V.borderFaint, borderRadius: 2, overflow: "hidden" }}>
+            <div style={{
+              height: "100%", borderRadius: 2,
+              background: data.cap_reached ? "#ef4444" : "rgba(245,158,11,0.6)",
+              width: `${Math.min((data.total_usd / Math.max(data.cap_usd, 0.01)) * 100, 100)}%`,
+              transition: "width 0.3s",
+            }} />
+          </div>
+          <Mono size={11} color={data.cap_reached ? "#ef4444" : V.ink}>
+            ${data.total_usd.toFixed(4)} / ${data.cap_usd.toFixed(2)}
+          </Mono>
+        </div>
+
+        {/* Per-integration breakdown */}
+        {data.by_integration.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {data.by_integration.map((r) => (
+              <div key={r.integration} style={{ display: "flex", justifyContent: "space-between" }}>
+                <Mono size={11} color={V.inkDim}>{r.integration}</Mono>
+                <Mono size={11} color={V.inkDim}>${r.cost_usd.toFixed(4)} · {r.calls} calls</Mono>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Cap editor */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+          <span style={{ fontFamily: V.sans, fontSize: 13, color: V.inkDim, flexShrink: 0 }}>Daily cap</span>
+          <input
+            value={cap}
+            onChange={(e) => setCap(e.target.value)}
+            placeholder={`$${data.cap_usd.toFixed(2)}`}
+            style={{
+              width: 72, background: "transparent",
+              border: `1px solid ${V.border}`, borderRadius: 6,
+              color: V.ink, fontSize: 13, padding: "5px 8px", outline: "none",
+            }}
+          />
+          <GhostBtn onClick={async () => {
+            const val = parseFloat(cap);
+            if (isNaN(val) || val < 0) return;
+            setSaving(true);
+            await api.agent.setCostCap(val).catch(() => {});
+            const fresh = await api.agent.getCost().catch(() => data);
+            if (fresh) setData(fresh as CostData);
+            setCap("");
+            setSaving(false);
+          }} disabled={saving || !cap.trim()}>
+            {saving ? "…" : "Set"}
+          </GhostBtn>
+        </div>
+      </div>
+    </SettingCard>
+  );
+}
+
+
+// ── Push notifications card ───────────────────────────────────────────────────
+
+function PushCard() {
+  const push = usePush();
+  if (!push.supported) return null;
+
+  return (
+    <SettingCard
+      title="push notifications"
+      description="get notified when Vello creates a draft or detects a running-late alert, even when the app isn't open."
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+            background: push.subscribed ? "#22c55e" : V.border }} />
+          <span style={{ fontFamily: V.sans, fontSize: 13, color: V.ink }}>
+            {push.subscribed ? "Enabled" : push.permission === "denied" ? "Blocked by browser" : "Not enabled"}
+          </span>
+        </div>
+        {push.permission !== "denied" && !push.subscribed && (
+          <GhostBtn onClick={() => push.subscribe()} disabled={push.loading}>
+            {push.loading ? "…" : "Enable"}
+          </GhostBtn>
+        )}
+        {push.subscribed && (
+          <GhostBtn onClick={() => push.unsubscribe()} disabled={push.loading}>
+            {push.loading ? "…" : "Disable"}
+          </GhostBtn>
+        )}
+        {push.permission === "denied" && (
+          <Mono size={11} color={V.inkFaint}>allow in browser site permissions</Mono>
+        )}
+      </div>
+    </SettingCard>
   );
 }
